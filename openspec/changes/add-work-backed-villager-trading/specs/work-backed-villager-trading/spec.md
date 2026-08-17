@@ -204,6 +204,17 @@ player-built beds, bells or a later player settlement as generated villages,
 and SHALL NOT grant an endowment to a village discovered while the feature is
 disabled.
 
+Every successfully spawned bred villager SHALL have durable breeding provenance.
+While work-backed trading is enforced, the system SHALL atomically move exactly
+four physical emeralds and three physical bread from each loaded parent into
+the child's personal inventory, yielding the existing eight-emerald and
+six-bread starting amount without changing the family totals. The transfer
+SHALL occur only when both parents can reserve their entire share and the child
+can accept the complete result. If either condition fails, neither parent nor
+the child inventory SHALL change. A bred villager SHALL never receive generated-
+village founding capital later, whether it remains inside the structure bounds,
+grows up, unloads or the server restarts.
+
 After the complete generated-facility search area is loaded, the system MAY
 establish a missing recovery site only in safe vacant cells inside the generated
 structure bounds. A Lumberyard SHALL contain a tree satisfying the current live
@@ -250,10 +261,25 @@ unstaffed rather than convert the village's only Farmer.
 
 #### Scenario: A resident loads after its neighbours
 
-- **WHEN** a second adult resident of the same generated village loads after
-  the first resident has already received founding capital
+- **WHEN** a second world-generated adult resident of the same generated
+  village loads after the first resident has already received founding capital
 - **THEN** the second resident receives its own eight emeralds and founding
   20/20 Totem hunger once while the first resident receives nothing again.
+
+#### Scenario: Both parents can fund their child
+
+- **WHEN** a bred child successfully joins the world and each parent carries at
+  least four physical emeralds and three physical bread
+- **THEN** each parent loses exactly that share, the child receives exactly
+  eight emeralds and six bread, and the family emerald and bread totals remain
+  unchanged.
+
+#### Scenario: One parent cannot fund a complete share
+
+- **WHEN** either parent lacks one required emerald or bread, or the child
+  cannot accept the complete combined endowment
+- **THEN** no partial debit or credit occurs, and the child's durable breeding
+  provenance prevents any later world-generation grant.
 
 #### Scenario: Fresh village has no valid generated tree
 

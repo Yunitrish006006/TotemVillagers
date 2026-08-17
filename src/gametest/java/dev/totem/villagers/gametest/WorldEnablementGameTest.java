@@ -61,7 +61,7 @@ public final class WorldEnablementGameTest {
     }
 
     @GameTest(maxTicks = 40)
-    public void adultWorkerReceivesOnePhysicalProfessionStarterKit(GameTestHelper helper) {
+    public void adultWorkerReceivesProfessionKitWithoutMintedCurrencyOrFood(GameTestHelper helper) {
         Villager farmer = spawnVillager(helper, new BlockPos(2, 2, 2));
         var server = helper.getLevel().getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
@@ -77,17 +77,17 @@ public final class WorldEnablementGameTest {
 
             VillagerStarterSupplyRuntime.tickForGameTest(server);
             VillagerWorkInventory inventory = VillagerWorkInventorySavedData.forServer(server).inventory(farmer.getUUID());
-            require(helper, count(inventory, Items.EMERALD) == VillagerStarterSupplyRuntime.STARTING_EMERALDS,
-                    "Starter emeralds were not physical inventory items");
+            require(helper, count(inventory, Items.EMERALD) == 0,
+                    "Ordinary adult worker received minted starter emeralds");
             require(helper, count(inventory, Items.IRON_HOE) == 1,
                     "Farmer did not receive its profession tool");
-            require(helper, count(inventory, Items.BREAD) == VillagerStarterSupplyRuntime.STARTING_BREAD + 6,
-                    "Deterministic Farmer bread merchandise and survival food were not stored together");
+            require(helper, count(inventory, Items.BREAD) == 6,
+                    "Farmer profession kit did not contain exactly its deterministic merchandise");
 
             VillagerStarterSupplyRuntime.tickForGameTest(server);
-            require(helper, count(inventory, Items.EMERALD) == VillagerStarterSupplyRuntime.STARTING_EMERALDS
+            require(helper, count(inventory, Items.EMERALD) == 0
                             && count(inventory, Items.IRON_HOE) == 1
-                            && count(inventory, Items.BREAD) == VillagerStarterSupplyRuntime.STARTING_BREAD + 6,
+                            && count(inventory, Items.BREAD) == 6,
                     "Starter kit was granted more than once");
             helper.succeed();
         } finally {

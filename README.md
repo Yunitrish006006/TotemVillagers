@@ -34,10 +34,13 @@ All commands require the Minecraft administrator permission.
 1. A new world starts in `enforced` mode automatically; no setup command is
    required. `/totemvillagers start` remains available if the world was
    intentionally disabled.
-2. Every initialized adult worker starts with a finite profession tool, food,
-   emerald wallet and one deterministic merchandise batch. Open its normal
-   Minecraft trade screen: sell rows exist only for lawful goods physically
-   present in that villager's personal inventory.
+2. Every initialized adult worker starts with a finite profession tool and one
+   deterministic merchandise batch. A generated-village founder receives the
+   finite world endowment described below; a bred child instead receives its
+   starting eight emeralds and six bread only by an exact physical transfer of
+   four emeralds and three bread from each parent. Open its normal Minecraft
+   trade screen: sell rows exist only for lawful goods physically present in
+   that villager's personal inventory.
 3. Vanilla player-to-villager purchase rows remain available in `enforced`
    mode. Selling raw goods is the player's only way to place materials into the
    economy: after Minecraft accepts the trade, the exact input stack enters that
@@ -409,6 +412,14 @@ its independent Totem hunger at 20/20.
 The per-resident ledger also covers residents whose chunks load later without
 paying the first group twice. This is a finite world-generation endowment, not
 an ongoing restock or a grant for player-built bells, beds or villages.
+
+A newly bred child is permanently distinguished from a world-generated
+resident. In `enforced` mode, each parent must be able to contribute exactly
+four emeralds and three bread from its protected inventory. Only when both
+complete shares and space for the combined child endowment are available does
+one atomic transfer give the child eight emeralds and six bread. If either
+parent is short, no parent is debited and the child receives no partial or
+later world-generation grant; reloading the world cannot repeat the transfer.
 
 Once residents load, the bootstrap first finds the two generated resource
 areas. After the complete facility search area is loaded, a missing or invalid

@@ -24,7 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** Grants each adult worker one finite, profession-aware physical starter kit. */
+/** Grants generated-village capital and each adult worker one finite profession kit. */
 public final class VillagerStarterSupplyRuntime {
     public static final int STARTING_EMERALDS = 8;
     public static final int STARTING_BREAD = 6;
@@ -61,18 +61,12 @@ public final class VillagerStarterSupplyRuntime {
                     continue;
                 }
                 VillagerWorkInventory inventory = inventories.inventory(villager.getUUID());
-                if (!ledger.hasBase(villager.getUUID())) {
-                    int legacyEmeralds = legacyWallets.balance(villager.getUUID());
-                    List<ItemStack> base = List.of(
-                            new ItemStack(Items.EMERALD, legacyEmeralds > 0 ? legacyEmeralds : STARTING_EMERALDS),
-                            new ItemStack(Items.BREAD, STARTING_BREAD));
-                    if (!inventory.insertAllExact(base)) {
+                int legacyEmeralds = legacyWallets.balance(villager.getUUID());
+                if (!ledger.hasBase(villager.getUUID()) && legacyEmeralds > 0) {
+                    if (!inventory.insertExact(new ItemStack(Items.EMERALD, legacyEmeralds))) {
                         continue;
                     }
-                    if (legacyEmeralds > 0) {
-                        legacyWallets.clear(villager.getUUID());
-                    }
-                    VillagerNutrition.grantFoundingNutrition(villager);
+                    legacyWallets.clear(villager.getUUID());
                     ledger.markBase(villager.getUUID());
                 }
                 String profession = professionId(villager);
@@ -100,6 +94,38 @@ public final class VillagerStarterSupplyRuntime {
                 ledger.markProfessionKit(villager.getUUID());
             }
         }
+    }
+
+    /**
+     * Resolves the one-time world-generation endowment for an eligible resident.
+     * Bred villagers are resolved without a grant because their assets can only
+     * come from their parents.
+     */
+    public static boolean grantGeneratedVillageBase(Villager villager) {
+        if (!(villager.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        MinecraftServer server = level.getServer();
+        VillagerStarterSupplySavedData ledger = VillagerStarterSupplySavedData.forServer(server);
+        if (ledger.isBred(villager.getUUID()) || ledger.hasBase(villager.getUUID())) {
+            return true;
+        }
+        VillagerWalletSavedData legacyWallets = VillagerWalletSavedData.forServer(server);
+        int legacyEmeralds = legacyWallets.balance(villager.getUUID());
+        List<ItemStack> base = List.of(
+                new ItemStack(Items.EMERALD, legacyEmeralds > 0 ? legacyEmeralds : STARTING_EMERALDS),
+                new ItemStack(Items.BREAD, STARTING_BREAD));
+        VillagerWorkInventory inventory = VillagerWorkInventorySavedData.forServer(server)
+                .inventory(villager.getUUID());
+        if (!inventory.insertAllExact(base)) {
+            return false;
+        }
+        if (legacyEmeralds > 0) {
+            legacyWallets.clear(villager.getUUID());
+        }
+        VillagerNutrition.grantFoundingNutrition(villager);
+        ledger.markBase(villager.getUUID());
+        return true;
     }
 
     /** Moves pre-physical-release stock into slots once, including exact offer components. */

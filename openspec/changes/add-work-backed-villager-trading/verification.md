@@ -539,6 +539,29 @@ The final verification pass used Java 25 and the release artifacts in
   --no-interactive` was not executed because the `openspec` executable is not
   installed on this host; no validation pass is claimed for this command.
 
+## Incremental verification — 2026-08-17 (parent-funded bred villagers)
+
+- Bred villagers now receive their existing eight-emerald and six-bread start
+  only through one atomic transfer of four emeralds and three bread from each
+  parent's protected inventory. If either share or the child's complete
+  capacity is unavailable, no inventory changes.
+- Birth provenance is saved separately from successful funding. The generated-
+  village bootstrap resolves every bred resident without granting world
+  capital, including an underfunded child, so adulthood, chunk reload and
+  restart cannot mint or repeat the endowment. Ordinary adult workers now get
+  only their finite profession kit; world capital remains exclusive to
+  eligible generated-village founders.
+- `./gradlew check` — passed on Java 25: all 70 JUnit tests and all 123 required
+  server GameTests passed. The two new live breeding cases exercise the actual
+  Minecraft 26.2 offspring hook and prove exact equal parent debits, family
+  emerald/bread conservation, all-or-nothing failure and rejection of a later
+  generated-village grant. The new codec test proves funded and underfunded
+  birth provenance survives saved-data serialization.
+- `./gradlew build sourcesJar -x runGameTest` — passed for version `0.1.26`.
+- `openspec validate add-work-backed-villager-trading --strict
+  --no-interactive` was not executed because the `openspec` executable remains
+  unavailable on this host; no validation pass is claimed.
+
 ## SHA-512 artifacts
 
 | Artifact | SHA-512 |
@@ -579,5 +602,5 @@ The final verification pass used Java 25 and the release artifacts in
 | `totem-villagers-0.1.20-sources.jar` | `5a129a2e7983077b2e22de98961001ea8bf2bfaf737a39ae206d757ee1416bce541b3c048afd08559639fcf39a1bfd5d87977d7ea7408d9225cdd03851124946` |
 | `totem-villagers-0.1.21.jar` | `39cd4b11407415c8298c5e0c71e336d4a7ee113780d756064c5fc553dd9bb7c692e512026a421123bde4c47644ceb3685c003d8c3d88df158357a52a85e054de` |
 | `totem-villagers-0.1.21-sources.jar` | `d2da207cb9361df527eb0ea70c99dc60e9dc6eb90892042d34ef44d85e142c689a037fc4734152bce56fc28828e96cb18a11611ef20374677dbf8e1388cb2449` |
-| `totem-villagers-0.1.26.jar` | `f6836fd38b4bee55d2fcfd4caa8d33327f943466fc10cc2b65c3916dc9e855730d6c2035fa4dacfa7fdd33b7eade0c801077d5c02ca87444aeb1c43a5b4f2595` |
-| `totem-villagers-0.1.26-sources.jar` | `190ef290c00b8eb0e30ef72536ee4cab157c9530707d95388574f2bdf36eac518eb72d818bdb7ea4d55787f3e0eff99088149e65aa52e2ad478974ea85045ca2` |
+| `totem-villagers-0.1.26.jar` | `93621a994077d500ba0c2cebc797382dc5e135256c7438fd6ca0034e37c1c56eefb33f6726167c700dbc6dd97273d1802f72e5407ee1a20ae20ada5ed27adfe2` |
+| `totem-villagers-0.1.26-sources.jar` | `9f5be40093beb585158e9e06af41d4fe5ebd5f0c6ecc22a189112dd2c44a306f8b055082493e476f4baca3593441f873faf875b19888d7166b8985f40588eebc` |

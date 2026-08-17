@@ -20,6 +20,7 @@ import dev.totem.villagers.runtime.VillagerFoodEconomyRuntime;
 import dev.totem.villagers.runtime.GuardConstructionRuntime;
 import dev.totem.villagers.runtime.WorldEnablementRuntime;
 import dev.totem.villagers.runtime.VillagerStarterSupplyRuntime;
+import dev.totem.villagers.runtime.VillagerBreedingEndowmentRuntime;
 import dev.totem.villagers.runtime.ToolsmithVillageEconomyRuntime;
 import dev.totem.villagers.runtime.TradeSnapshotRuntime;
 import dev.totem.villagers.runtime.MinerCharcoalEconomyRuntime;
@@ -57,6 +58,7 @@ public final class TotemVillagers implements ModInitializer {
         VillageWorldgenBootstrapRuntime.register();
         VillagerResourceWorkforceRuntime.register();
         VillagerSpecialistProfessionRuntime.register();
+        VillagerBreedingEndowmentRuntime.register();
         VillagerStarterSupplyRuntime.register();
         MinerCharcoalEconomyRuntime.register();
         ToolsmithVillageEconomyRuntime.register();

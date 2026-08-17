@@ -151,6 +151,7 @@ public final class FishermanVillageLongevityGameTest {
                     "Fisherman longevity fixture did not resolve its vanilla Barrel and a nearby Campfire: barrel="
                             + level.getBlockState(barrel) + ", campfire=" + level.getBlockState(campfire));
 
+            village.forEach(VillagerStarterSupplyRuntime::grantGeneratedVillageBase);
             VillagerStarterSupplyRuntime.tickForGameTest(server);
             VillagerWorkInventory fishermanInventory = inventories.inventory(fisherman.getUUID());
             VillagerWorkInventory toolsmithInventory = inventories.inventory(toolsmith.getUUID());

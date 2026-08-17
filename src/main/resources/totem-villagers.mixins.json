@@ -9,6 +9,7 @@
     "StructureTemplateAccessor",
     "StructureTemplateManagerMixin",
     "StructureTemplatePaletteAccessor",
+    "VillagerBreedingEndowmentMixin",
     "VillagerSpecialistProfessionMixin",
     "VillagerSpecialistTradeInteractionMixin",
     "VillagerWorkInventoryDeathMixin"

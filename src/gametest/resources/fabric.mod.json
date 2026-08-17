@@ -39,6 +39,7 @@
       "dev.totem.villagers.gametest.SpecialistMaterialTradesGameTest",
       "dev.totem.villagers.gametest.SpecialistMerchantInteractionGameTest",
       "dev.totem.villagers.gametest.PlayerPurchaseWorkInventoryGameTest",
+      "dev.totem.villagers.gametest.VillagerBreedingEndowmentGameTest",
       "dev.totem.villagers.gametest.WorldEnablementGameTest"
     ],
     "fabric-client-gametest": [

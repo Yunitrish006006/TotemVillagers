@@ -105,6 +105,10 @@
   high-gable/deep-eave/side-gallery silhouettes and multi-turn supported
   branches; prove every selected home is actually walkable from the plaza and
   repair core longhouse, Mine and fishing-basin clearance blockers.
+- [x] 3.17 Fund every bred villager's initial eight emeralds and six bread by
+  atomically transferring equal four-emerald and three-bread shares from both
+  parents; persist birth provenance so insufficient funds, reloads and
+  generated-village bounds can never mint or repeat the endowment.
 
 ## 4. Verification and delivery
 

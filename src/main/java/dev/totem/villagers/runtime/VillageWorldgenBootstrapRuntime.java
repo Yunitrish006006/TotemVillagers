@@ -3,7 +3,6 @@ package dev.totem.villagers.runtime;
 import dev.totem.villagers.config.WorkBackedTradingMode;
 import dev.totem.villagers.config.WorkBackedTradingSettingsSavedData;
 import dev.totem.villagers.content.TotemVillagerBlocks;
-import dev.totem.villagers.needs.VillagerNutrition;
 import dev.totem.villagers.work.WorkOrder;
 import dev.totem.villagers.work.WorkOrderDefinitions;
 import dev.totem.villagers.work.WorkSource;
@@ -247,16 +246,23 @@ public final class VillageWorldgenBootstrapRuntime {
                 if (current.hasEndowed(resident.getUUID())) {
                     continue;
                 }
-                VillagerNutrition.grantFoundingNutrition(resident);
+                if (!VillagerStarterSupplyRuntime.grantGeneratedVillageBase(resident)) {
+                    continue;
+                }
                 villages.markResidentEndowed(current.id(), resident.getUUID());
                 current = currentVillage(villages, current);
             }
         } else if (!current.capitalGranted() && !residents.isEmpty()) {
             // Compatibility for an incomplete pre-v4 record. Completed legacy
             // records remain closed so an upgrade can never duplicate capital.
-            residents.forEach(VillagerNutrition::grantFoundingNutrition);
-            villages.markCapitalGranted(current.id());
-            current = current.withCapitalGranted();
+            boolean allResolved = true;
+            for (Villager resident : residents) {
+                allResolved &= VillagerStarterSupplyRuntime.grantGeneratedVillageBase(resident);
+            }
+            if (allResolved) {
+                villages.markCapitalGranted(current.id());
+                current = current.withCapitalGranted();
+            }
         }
         return current;
     }

@@ -72,10 +72,13 @@ The producer keeps a 20-point emergency ration, while the transferred food and
 one-emerald payment move atomically between personal inventories. This exchange
 does not depend on a random player-facing food row. A Farmer can craft the
 `totem:farmer_bread` reserve without that row, but the exact current player
-crafting recipe remains authoritative. Every newly loaded adult receives one finite
-base kit of eight emeralds and six bread at 20/20 hunger; a profession kit later adds one
-appropriate tool and one current sell-offer batch. The durable ledger prevents
-repeated grants on chunk reload. No unloaded-villager lookup occurs.
+crafting recipe remains authoritative. A world-generated village resident
+receives one finite base kit of eight emeralds and six bread at 20/20 hunger.
+A bred child receives the same physical amount only through an atomic equal
+split from its two parents; an underfunded birth receives none and is never
+eligible for a later world grant. A profession kit later adds one appropriate
+tool and one current sell-offer batch. The durable ledger prevents repeated
+grants on chunk reload. No unloaded-villager lookup occurs.
 
 ## Required model extension
 
