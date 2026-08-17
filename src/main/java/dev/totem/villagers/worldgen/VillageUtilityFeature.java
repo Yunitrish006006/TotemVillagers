@@ -108,6 +108,13 @@ public final class VillageUtilityFeature extends Feature<NoneFeatureConfiguratio
                 .relative(mineDirection().getClockWise(), coordinate[1]).below(step);
     }
 
+    /** The side entrance shared by the Oak and Mangrove mine palettes. */
+    public static BlockPos mineGate(BlockPos furnace) {
+        Direction direction = mineDirection();
+        return mineCenter(furnace).relative(direction.getOpposite(), 3)
+                .relative(direction.getClockWise().getOpposite());
+    }
+
     public static boolean hasGuardRail(int step) {
         return step % 4 != 2;
     }
@@ -233,8 +240,13 @@ public final class VillageUtilityFeature extends Feature<NoneFeatureConfiguratio
         // The western side entrance passes beside the Furnace and joins the
         // first spiral stair without covering any part of the hollow centre.
         set(level, clip, mineHeadOffset(center, direction, -2, -1, -1), Blocks.COBBLESTONE.defaultBlockState());
-        BlockPos gate = mineHeadOffset(center, direction, -3, 0, -1);
-        set(level, clip, gate, Blocks.OAK_FENCE_GATE.defaultBlockState().setValue(FenceGateBlock.FACING, direction));
+        BlockPos gate = mineGate(furnace);
+        // Villagers cannot open fence gates through vanilla navigation. Keep
+        // the safety gate visibly folded open so the Miner can actually walk
+        // from the village deck to the first exposed face in the shaft.
+        set(level, clip, gate, Blocks.OAK_FENCE_GATE.defaultBlockState()
+                .setValue(FenceGateBlock.FACING, direction)
+                .setValue(BlockStateProperties.OPEN, true));
 
         BlockState post = Blocks.STRIPPED_OAK_LOG.defaultBlockState();
         for (int forward : new int[]{-3, 3}) {

@@ -12,6 +12,7 @@ import dev.totem.villagers.worker.WorkerAssignment;
 import dev.totem.villagers.worker.WorkerAssignmentSavedData;
 import dev.totem.villagers.world.LumberjackWorldWorkAction;
 import dev.totem.villagers.world.MinerWorldWorkAction;
+import dev.totem.villagers.world.WorldWorkNavigation;
 import dev.totem.villagers.world.WorldWorkPermissions;
 import dev.totem.villagers.world.ore.MinerIncidentalOreDefinitions;
 import dev.totem.villagers.world.ore.MinerIncidentalOreRule;
@@ -63,7 +64,7 @@ public final class WorldMaterialDeliveryGameTest {
     @GameTest(maxTicks = 40)
     public void minerStoresVanillaCobblestoneExactlyOnce(GameTestHelper helper) {
         BlockPos target = helper.absolutePos(new BlockPos(8, 2, 8));
-        Villager miner = spawnVillager(helper, new BlockPos(7, 2, 8));
+        Villager miner = spawnVillager(helper, new BlockPos(8, 3, 8));
         try {
             setProfession(miner, "totem", "miner");
             helper.getLevel().setBlock(target, Blocks.STONE.defaultBlockState(), 3);
@@ -73,6 +74,17 @@ public final class WorldMaterialDeliveryGameTest {
                     "Could not give the Miner a personal stone pickaxe");
             WorkOrder order = minerOrder();
 
+            require(helper, !WorldWorkNavigation.isWithinReach(miner, target)
+                            && !new MinerWorldWorkAction().complete(
+                            helper.getLevel(), miner, target, MINER_TARGETS, order, inventory),
+                    "Miner standing on the surface mined a buried target through the floor");
+            require(helper, helper.getLevel().getBlockState(target).is(Blocks.STONE)
+                            && count(inventory.snapshot(), Items.COBBLESTONE) == 0,
+                    "Rejected surface mining changed the target or credited materials");
+
+            miner.setPos(target.getX() - 0.5D, target.getY(), target.getZ() + 0.5D);
+            require(helper, WorldWorkNavigation.isWithinReach(miner, target),
+                    "Miner did not enter the exposed horizontal work face");
             require(helper, new MinerWorldWorkAction().complete(helper.getLevel(), miner, target, MINER_TARGETS, order, inventory),
                     "Miner could not commit a permitted stone target to its personal material store");
             require(helper, count(inventory.snapshot(), Items.COBBLESTONE) == 1,
@@ -81,6 +93,7 @@ public final class WorldMaterialDeliveryGameTest {
                     "Miner work left the committed source block behind");
             helper.succeed();
         } finally {
+            VillagerWorkInventorySavedData.forServer(helper.getLevel().getServer()).drain(miner.getUUID());
             miner.discard();
         }
     }

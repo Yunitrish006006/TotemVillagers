@@ -66,10 +66,14 @@ public final class BoundedZoneTargetFinder {
                     continue;
                 }
                 for (int radius = 0; radius <= maximumRadius && checks < maximumChecks; radius++) {
-                    for (int x = centerX - radius; x <= centerX + radius && checks < maximumChecks; x++) {
-                        for (int z = centerZ - radius; z <= centerZ + radius && checks < maximumChecks; z++) {
-                            if (radius != 0 && x != centerX - radius && x != centerX + radius
-                                    && z != centerZ - radius && z != centerZ + radius) {
+                    int minimumX = Math.max(zone.minimum().x(), centerX - radius);
+                    int maximumX = Math.min(zone.maximum().x(), centerX + radius);
+                    int minimumZ = Math.max(zone.minimum().z(), centerZ - radius);
+                    int maximumZ = Math.min(zone.maximum().z(), centerZ + radius);
+                    for (int x = minimumX; x <= maximumX && checks < maximumChecks; x++) {
+                        for (int z = minimumZ; z <= maximumZ && checks < maximumChecks; z++) {
+                            if (radius != 0 && Math.abs(x - centerX) != radius
+                                    && Math.abs(z - centerZ) != radius) {
                                 continue;
                             }
                             BlockPos candidate = new BlockPos(x, y, z);

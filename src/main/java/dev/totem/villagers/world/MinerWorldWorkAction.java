@@ -23,7 +23,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -34,7 +33,6 @@ import java.util.function.IntSupplier;
 
 /** Commits one Mine Zone block through Minecraft's live mining loot table. */
 public final class MinerWorldWorkAction {
-    private static final double WORK_REACH_SQUARED = 16.0D;
     private final IntSupplier deterministicRoll;
 
     public MinerWorldWorkAction() {
@@ -50,7 +48,7 @@ public final class MinerWorldWorkAction {
                             VillagerWorkInventory inventory) {
         if (!"totem:miner".equals(order.professionId())
                 || !level.isLoaded(target)
-                || miner.distanceToSqr(Vec3.atCenterOf(target)) > WORK_REACH_SQUARED
+                || !WorldWorkNavigation.isWithinReach(miner, target)
                 || !level.getBlockState(target).is(eligibleTargets)
                 || !WorldWorkPermissions.mayWork(level, miner, target)) {
             return false;

@@ -34,11 +34,13 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
+import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.Optional;
@@ -118,6 +120,10 @@ public final class VillagerWorldWorkRuntime {
         Optional<BlockPos> activeTarget = state.activeWork().flatMap(active -> active.worldTarget())
                 .flatMap(WorldWorkTarget::packedBlockPosition).map(BlockPos::of);
         boolean atTarget = activeTarget.map(target -> WorldWorkNavigation.isWithinReach(worker, target)).orElse(false);
+        if (atTarget) {
+            worker.getNavigation().stop();
+            worker.lookAt(EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(activeTarget.orElseThrow()));
+        }
         WorkScheduleInput input = new WorkScheduleInput(worker.getUUID(), professionId, level.getGameTime(), worker.isAlive(),
                 level.isLoaded(worker.blockPosition()), inDanger(worker), worker.isSleeping(), level.isRaided(worker.blockPosition()),
                 zone.isPresent() && hasPhysicalWorkstation, atTarget, candidates);

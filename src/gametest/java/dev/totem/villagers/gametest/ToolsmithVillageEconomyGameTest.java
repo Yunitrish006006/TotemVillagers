@@ -455,6 +455,7 @@ public final class ToolsmithVillageEconomyGameTest {
             var level = helper.getLevel();
             BlockPos stone = helper.absolutePos(new BlockPos(2, 2, 4));
             level.setBlock(stone, Blocks.STONE.defaultBlockState(), 3);
+            economy.miner().setPos(stone.getX() + 1.5D, stone.getY(), stone.getZ() + 0.5D);
             TagKey<Block> minerTargets = TagKey.create(Registries.BLOCK,
                     Identifier.fromNamespaceAndPath("totem", "miner_targets"));
             require(helper, new MinerWorldWorkAction().complete(level, economy.miner(), stone, minerTargets,

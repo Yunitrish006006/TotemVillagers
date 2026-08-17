@@ -106,6 +106,9 @@ public final class FishermanVillageLongevityGameTest {
         Villager toolsmith = spawn(helper, offsetY(new BlockPos(4, 3, 3), verticalOffset), "minecraft:toolsmith");
         Villager miner = spawn(helper, offsetY(new BlockPos(6, 3, 3), verticalOffset), "totem:miner");
         Villager lumberjack = spawn(helper, offsetY(new BlockPos(4, 3, 6), verticalOffset), "totem:lumberjack");
+        double minerHomeX = miner.getX();
+        double minerHomeY = miner.getY();
+        double minerHomeZ = miner.getZ();
         List<Villager> village = List.of(fisherman, toolsmith, miner, lumberjack);
         WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(server);
         GeneratedVillageSavedData generatedVillages = GeneratedVillageSavedData.forServer(server);
@@ -183,7 +186,10 @@ public final class FishermanVillageLongevityGameTest {
                         level, miner, minerInventory, stoneOrder); mined++) {
                     ensureTool(helper, server, minerInventory, toolsmithInventory, ToolFamily.PICKAXE, counters, day);
                     OreCounts before = oreCounts(minerInventory);
-                    require(helper, mining.complete(level, miner, mineFace, MINER_TARGETS, stoneOrder, minerInventory),
+                    miner.setPos(mineFace.getX() + 0.5D, mineFace.getY(), mineFace.getZ() - 0.5D);
+                    boolean minedFace = mining.complete(level, miner, mineFace, MINER_TARGETS, stoneOrder, minerInventory);
+                    miner.setPos(minerHomeX, minerHomeY, minerHomeZ);
+                    require(helper, minedFace,
                             "Miner could not extract its generated deep-seam stone on day " + day + "; "
                                     + snapshot(village, inventories));
                     require(helper, level.getBlockState(mineFace).is(Blocks.STONE),

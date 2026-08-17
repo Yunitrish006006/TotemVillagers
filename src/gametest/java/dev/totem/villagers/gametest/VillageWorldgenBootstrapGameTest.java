@@ -5,6 +5,10 @@ import dev.totem.villagers.needs.VillagerNutrition;
 import dev.totem.villagers.inventory.VillagerWorkInventorySavedData;
 import dev.totem.villagers.runtime.VillageWorldgenBootstrapRuntime;
 import dev.totem.villagers.world.FishermanWorkstation;
+import dev.totem.villagers.world.MinerFurnaceWorkstation;
+import dev.totem.villagers.world.WorldWorkNavigation;
+import dev.totem.villagers.worker.BlockCoordinate;
+import dev.totem.villagers.worker.WorkZone;
 import dev.totem.villagers.worker.WorkZoneRecord;
 import dev.totem.villagers.worker.WorkerAssignmentSavedData;
 import dev.totem.villagers.worldgen.GeneratedVillageSavedData;
@@ -26,6 +30,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
@@ -39,6 +44,7 @@ import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.entity.JigsawBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement;
@@ -404,7 +410,7 @@ public final class VillageWorldgenBootstrapGameTest {
         helper.succeed();
     }
 
-    @GameTest(maxTicks = 20)
+    @GameTest(maxTicks = 40)
     public void mineSurfaceBuildsAFramedShelterWithoutObstructingTheShaft(GameTestHelper helper) {
         BlockPos furnace = helper.absolutePos(new BlockPos(8, 20, 8));
         BlockPos center = VillageUtilityFeature.mineCenter(furnace);
@@ -430,6 +436,7 @@ public final class VillageWorldgenBootstrapGameTest {
         BlockPos roofEave = center.relative(forward, -4).above(4);
         BlockPos raisedRoof = center.relative(forward, -3).relative(sideways, -3).above(5);
         require(helper, helper.getLevel().getBlockState(gate).is(Blocks.OAK_FENCE_GATE)
+                        && helper.getLevel().getBlockState(gate).getValue(BlockStateProperties.OPEN)
                         && helper.getLevel().getBlockState(guardedRim).is(Blocks.OAK_FENCE)
                         && helper.getLevel().getBlockState(roofEave).is(Blocks.SPRUCE_STAIRS)
                         && helper.getLevel().getBlockState(raisedRoof).is(Blocks.SPRUCE_SLAB)
@@ -440,7 +447,35 @@ public final class VillageWorldgenBootstrapGameTest {
                         && helper.getLevel().getBlockState(VillageUtilityFeature.mineLanding(furnace, 0).below())
                         .is(Blocks.COBBLESTONE_STAIRS),
                 "Mine shelter decoration obstructed the hollow shaft or first spiral stair");
-        helper.succeed();
+
+        BlockPos outside = gate.relative(forward.getOpposite(), 2);
+        helper.getLevel().setBlock(outside.below(), Blocks.COBBLESTONE.defaultBlockState(), 3);
+        helper.getLevel().setBlock(outside.relative(forward).below(), Blocks.COBBLESTONE.defaultBlockState(), 3);
+        // The navigation contract only needs a Villager mob. A Nitwit remains
+        // fully mobile but cannot participate in concurrent workforce
+        // allocation for other shared-level GameTests.
+        Villager miner = spawnAtAbsolute(helper, outside, "minecraft:nitwit");
+        BlockPos firstStoneFace = VillageUtilityFeature.mineLanding(furnace, 1).relative(forward.getOpposite());
+        helper.getLevel().setBlock(gate, helper.getLevel().getBlockState(gate)
+                .setValue(BlockStateProperties.OPEN, false), 3);
+        BlockCoordinate furnaceCoordinate = new BlockCoordinate(furnace.getX(), furnace.getY(), furnace.getZ());
+        WorkZone furnaceZone = new WorkZone(UUID.randomUUID(), helper.getLevel().dimension().identifier().toString(),
+                furnaceCoordinate, furnaceCoordinate);
+        require(helper, MinerFurnaceWorkstation.ensureAssigned(helper.getLevel(), miner, furnaceZone)
+                        .filter(furnace::equals).isPresent()
+                        && helper.getLevel().getBlockState(gate).getValue(BlockStateProperties.OPEN),
+                "Miner assignment did not reopen the entrance of an existing generated Mine");
+        helper.runAfterDelay(2, () -> {
+            try {
+                require(helper, WorldWorkNavigation.pathToReach(helper.getLevel(), miner, firstStoneFace).isPresent(),
+                        "Open Mine entrance did not give an outside Miner a path to the first exposed work face"
+                                + "; worker=" + miner.blockPosition() + ", gate="
+                                + helper.getLevel().getBlockState(gate) + ", target=" + firstStoneFace);
+                helper.succeed();
+            } finally {
+                miner.discard();
+            }
+        });
     }
 
     @GameTest(maxTicks = 40)
@@ -774,6 +809,22 @@ public final class VillageWorldgenBootstrapGameTest {
         }
         villager.setVillagerData(villager.getVillagerData().withProfession(
                 BuiltInRegistries.VILLAGER_PROFESSION.wrapAsHolder(unemployed)));
+        return villager;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Villager spawnAtAbsolute(GameTestHelper helper, BlockPos position, String professionId) {
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.fromNamespaceAndPath("minecraft", "villager"));
+        require(helper, type != null, "Missing minecraft:villager entity type");
+        Villager villager = (Villager) type.create(helper.getLevel(), EntitySpawnReason.COMMAND);
+        require(helper, villager != null, "Could not create a Villager at an absolute test position");
+        VillagerProfession profession = BuiltInRegistries.VILLAGER_PROFESSION.getValue(Identifier.parse(professionId));
+        require(helper, profession != null, "Missing " + professionId + " profession");
+        villager.setVillagerData(villager.getVillagerData().withProfession(
+                BuiltInRegistries.VILLAGER_PROFESSION.wrapAsHolder(profession)));
+        villager.setPos(position.getX() + 0.5D, position.getY(), position.getZ() + 0.5D);
+        require(helper, helper.getLevel().addFreshEntity(villager),
+                "Could not add the absolute-position Villager to the test level");
         return villager;
     }
 

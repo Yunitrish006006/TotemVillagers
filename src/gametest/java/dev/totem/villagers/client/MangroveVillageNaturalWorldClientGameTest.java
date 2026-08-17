@@ -14,11 +14,15 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
@@ -115,8 +119,41 @@ public final class MangroveVillageNaturalWorldClientGameTest implements FabricCl
             latest = workerPair(singleplayer, village);
         }
         require(latest.complete(), "Natural village workers did not complete real world work in " + village.id()
-                + "; miner={" + latest.miner().facts() + "}; lumberjack={" + latest.lumberjack().facts() + "}");
+                + "; miner={" + latest.miner().facts() + "}; mine={"
+                + minerZoneFacts(singleplayer, village, latest.miner().id()) + "}; lumberjack={"
+                + latest.lumberjack().facts() + "}");
         return latest;
+    }
+
+    private static String minerZoneFacts(TestSingleplayerContext singleplayer, NaturalVillage village, UUID minerId) {
+        return singleplayer.getServer().computeOnServer(server -> {
+            var level = server.overworld();
+            var assignments = WorkerAssignmentSavedData.forServer(server);
+            var zoneRecord = assignments.zoneSnapshot().get(village.minerZoneId());
+            Entity entity = level.getEntityInAnyDimension(minerId);
+            if (zoneRecord == null || !(entity instanceof Villager miner)) {
+                return "zone or Miner unavailable";
+            }
+            var zone = zoneRecord.zone();
+            TagKey<Block> targets = TagKey.create(Registries.BLOCK,
+                    Identifier.fromNamespaceAndPath("totem", "miner_targets"));
+            List<BlockPos> tagged = BlockPos.betweenClosedStream(
+                            zone.minimum().x(), zone.minimum().y(), zone.minimum().z(),
+                            zone.maximum().x(), zone.maximum().y(), zone.maximum().z())
+                    .map(BlockPos::immutable)
+                    .filter(position -> level.getBlockState(position).is(targets))
+                    .sorted(Comparator.comparingDouble(position -> position.distSqr(miner.blockPosition())))
+                    .limit(16)
+                    .toList();
+            String candidates = tagged.stream().map(position -> position + "[near="
+                            + WorldWorkNavigation.isWithinReach(miner, position) + ",path="
+                            + WorldWorkNavigation.pathToReach(level, miner, position)
+                            .map(path -> path.canReach() + "/" + path.getNodeCount() + "/"
+                                    + BlockPos.containing(path.getEntityPosAtNode(miner, path.getNodeCount() - 1)))
+                            .orElse("none") + "]")
+                    .toList().toString();
+            return "bounds=" + zone.minimum() + ".." + zone.maximum() + ",closestTargets=" + candidates;
+        });
     }
 
     private static WorkerPair workerPair(TestSingleplayerContext singleplayer, NaturalVillage village) {
@@ -164,7 +201,8 @@ public final class MangroveVillageNaturalWorldClientGameTest implements FabricCl
                         + (stack.getDamageValue() > 0 ? "#" + stack.getDamageValue() : ""))
                 .sorted().toList().toString();
         String facts = "id=" + workerId + ",profession=" + profession + ",pos=" + villager.blockPosition()
-                + ",food=" + VillagerNutrition.foodLevel(villager) + ",work=" + work + ",inventory=" + items;
+                + ",onGround=" + villager.onGround() + ",food=" + VillagerNutrition.foodLevel(villager)
+                + ",work=" + work + ",inventory=" + items;
         return new WorkerProbe(workerId, expectedProfession, villager.position(),
                 expectedProfession.equals(profession) && toolWorked, facts);
     }

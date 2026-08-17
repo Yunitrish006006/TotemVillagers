@@ -75,8 +75,9 @@ public final class MinimumVillageProductionGameTest {
         WorkZone deepNaturalMine = new WorkZone(UUID.randomUUID(), level.dimension().identifier().toString(),
                 new BlockCoordinate(workerPosition.getX() - 3, workerPosition.getY(), workerPosition.getZ() - 3),
                 new BlockCoordinate(workerPosition.getX() + 3, workerPosition.getY() + 19, workerPosition.getZ() + 3));
-        try {
-            require(helper, new BoundedZoneTargetFinder()
+        helper.runAfterDelay(2, () -> {
+            try {
+                require(helper, new BoundedZoneTargetFinder()
                             .findNearest(level, miner, deepNaturalMine, MINER_TARGETS, 256)
                             .filter(distantFace::equals).isPresent(),
                     "Bounded natural-mine scan exhausted its budget below nearby empty columns before checking the surface face"
@@ -87,10 +88,11 @@ public final class MinimumVillageProductionGameTest {
                             + ", path=" + WorldWorkNavigation.pathToReach(level, miner, distantFace)
                             .map(path -> "reachable=" + path.canReach() + ", nodes=" + path.getNodeCount())
                             .orElse("none"));
-            helper.succeed();
-        } finally {
-            miner.discard();
-        }
+                helper.succeed();
+            } finally {
+                miner.discard();
+            }
+        });
     }
 
     @GameTest(maxTicks = 40)
@@ -98,13 +100,13 @@ public final class MinimumVillageProductionGameTest {
         ServerLevel level = helper.getLevel();
         BlockPos treeBase = helper.absolutePos(new BlockPos(5, 2, 5));
         helper.setBlock(new BlockPos(5, 1, 5), Blocks.DIRT);
-        helper.setBlock(new BlockPos(4, 2, 5), Blocks.COBBLESTONE);
+        helper.setBlock(new BlockPos(4, 1, 5), Blocks.COBBLESTONE);
         for (int height = 0; height < 6; height++) {
             level.setBlock(treeBase.above(height), Blocks.OAK_LOG.defaultBlockState(), 3);
         }
         level.setBlock(treeBase.above(6), Blocks.OAK_LEAVES.defaultBlockState()
                 .setValue(LeavesBlock.PERSISTENT, true), 3);
-        Villager lumberjack = spawnMobileVillager(helper, new BlockPos(4, 3, 5), "totem:lumberjack");
+        Villager lumberjack = spawnMobileVillager(helper, new BlockPos(4, 2, 5), "totem:lumberjack");
         WorkOrder order = order(helper, "totem:lumberjack_oak_logs");
         WorkZone variableHeightPlot = zone(level, treeBase, treeBase.above(15));
         try {
@@ -135,6 +137,7 @@ public final class MinimumVillageProductionGameTest {
         Villager lumberjack = spawnVillager(helper, new BlockPos(16, 3, 5), "totem:lumberjack");
         VillagerWorkInventorySavedData inventories = VillagerWorkInventorySavedData.forServer(level.getServer());
         try {
+            miner.setPos(oreFace.getX() - 0.5D, oreFace.getY(), oreFace.getZ() + 0.5D);
             level.setBlock(composter, Blocks.COMPOSTER.defaultBlockState(), 3);
             farmer.getBrain().setMemory(MemoryModuleType.JOB_SITE, GlobalPos.of(level.dimension(), composter));
             level.setBlock(crop.below(), Blocks.FARMLAND.defaultBlockState(), 3);
@@ -281,9 +284,9 @@ public final class MinimumVillageProductionGameTest {
                             + "/" + minerFacts(level, miner, stone, minerZone)
                             + "/" + lumberjackFacts(level, lumberjack, treeBase, lumberjackZone));
             require(helper, farmer.distanceToSqr(Vec3.atCenterOf(crop)) <= 16.0D
-                            && miner.distanceToSqr(Vec3.atCenterOf(stone)) <= 16.0D
-                            && lumberjack.distanceToSqr(Vec3.atCenterOf(treeBase)) <= 16.0D,
-                    "A founding worker committed without navigating into work reach");
+                            && WorldWorkNavigation.isWithinReach(miner, stone)
+                            && WorldWorkNavigation.isWithinReach(lumberjack, treeBase),
+                    "A founding resource worker committed without occupying an adjacent work face");
             assignments.removeZone(minerZone.id());
             assignments.removeZone(lumberjackZone.id());
             VillagerWorkSavedData.forServer(server).remove(farmer.getUUID());
@@ -333,6 +336,8 @@ public final class MinimumVillageProductionGameTest {
         return professionId(miner) + ",food=" + VillagerNutrition.foodLevel(miner)
                 + ",target=" + level.getBlockState(stone).is(MINER_TARGETS)
                 + ",path=" + (miner.getNavigation().createPath(stone, 0) != null)
+                + ",workPath=" + WorldWorkNavigation.pathToReach(level, miner, stone)
+                .map(path -> path.getEndNode() + "->" + path.getTarget()).orElse("none")
                 + ",permission=" + WorldWorkPermissions.mayWork(level, miner, stone)
                 + ",station=" + MinerFurnaceWorkstation.ensureAssigned(level, miner, zone.zone()).isPresent();
     }
@@ -341,6 +346,8 @@ public final class MinimumVillageProductionGameTest {
         return professionId(lumberjack) + ",food=" + VillagerNutrition.foodLevel(lumberjack)
                 + ",target=" + level.getBlockState(treeBase).is(LUMBERJACK_LOGS)
                 + ",path=" + (lumberjack.getNavigation().createPath(treeBase, 0) != null)
+                + ",workPath=" + WorldWorkNavigation.pathToReach(level, lumberjack, treeBase)
+                .map(path -> path.getEndNode() + "->" + path.getTarget()).orElse("none")
                 + ",permission=" + WorldWorkPermissions.mayWork(level, lumberjack, treeBase)
                 + ",tree=" + LumberjackWorldWorkAction.isEligibleBase(level, lumberjack, zone.zone(), treeBase,
                 LUMBERJACK_LOGS, WorkOrderDefinitions.catalog().snapshot().get("totem:lumberjack_oak_logs"));
