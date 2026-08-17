@@ -274,17 +274,23 @@ height curve is independently reloadable under
 `data/totem/totem_villagers/incidental_ores/*.json`, allowing later simulation
 results to tune the economy without a Java change.
 
-A stone face is renewable only when it belongs to the persisted Miner Zone of
-a world-generated village. A successful operation restores that exact visible
-stone face after resolving its live loot, incidental-ore roll and one real
-pickaxe durability point. Player-created Miner Zones and every non-stone target
-remain ordinary finite terrain. To prevent an unlucky sequence from eventually
-removing the iron needed for replacement shears and tools, a generated Miner
-that commits 15 consecutive eligible mines without iron uses the currently
-loaded, height- and substrate-valid iron profile on its 16th mine. Removing or
-changing that data-pack profile removes or changes the safety result; it is not
-a hidden hard-coded item grant. Each incidental material is capped at 64 items
-in personal storage so an unattended mine cannot grow inventory without bound.
+A successful mine always consumes its visible source block. When that source is
+inside the persisted Mine Zone of a world-generated village, the same commit
+also attempts to add one deeper tread using the original covered 5×5 spiral:
+cobblestone stair, three-block head clearance, roof, inner guard rail and a new
+natural outward mining face. The Zone's lower Y boundary is persisted only
+after the complete tread succeeds, so the next search and a later restart both
+continue from the new depth. Player-created Miner Zones remain ordinary finite
+terrain and never construct a shaft. Extension stops safely at the world floor
+or before fluid, a container, a live entity, protected terrain, an unloaded
+cell or a material outside the generated-mine palette; the source already mined
+for real is not recreated. To prevent an unlucky sequence from removing the
+iron needed for replacement shears and tools, a generated Miner that commits 15
+consecutive eligible mines without iron uses the currently loaded, height- and
+substrate-valid iron profile on its 16th mine. Removing or changing that
+data-pack profile removes or changes the safety result; it is not a hidden
+hard-coded item grant. Each incidental material is capped at 64 items in
+personal storage so an unattended mine cannot grow inventory without bound.
 
 | Miner material | Sale batch | Price |
 | --- | ---: | ---: |
@@ -433,7 +439,9 @@ after harvesting. A Miner starter contains one Furnace and a covered 5×5 spiral
 descending mineshaft. Every landing has a retained raw-stone mining face, a
 cobblestone stair ramp, three blocks of head clearance and a solid cobblestone
 roof, so the Miner can keep descending without mining away its own path. Its
-Miner Work Zone covers the complete shaft. The custom `totem:miner` profession
+Miner Work Zone initially covers the complete generated shaft, then persists
+one additional lower layer for each safely completed tread. The custom
+`totem:miner` profession
 has a dedicated Miner profession skin with a yellow safety helmet and lamp;
 it never consumes a work-inventory slot or becomes a death drop.
 
@@ -454,9 +462,10 @@ horizontal directions. It still refuses fluids, containers, village buildings,
 decorations, unloaded terrain and player-built structures. A nearby in-zone
 Furnace may be claimed within 16 blocks even when uneven terrain causes one
 transient pathfinding miss; ordinary movement continues to retry afterward.
-The generated Mine's marked stone faces are deep seams and remain renewable
-while their persisted village/Zone identity remains valid; manually created
-zones still consume terrain. The generated vine trellis likewise supports
+The generated Mine's marked faces are consumed normally; a successful mine
+extends the original covered spiral downward by one safe tread and persists the
+Zone's new lower boundary. Manually created zones consume terrain without any
+automatic construction. The generated vine trellis likewise supports
 bounded lower-vine clipping while preserving its mother segment. These
 facilities are not repaired if a player breaks their Furnace, Woodcutter,
 trellis or other required blocks. If a village has no safe space, the
@@ -510,7 +519,8 @@ The economy is physically complete at generation time: a Fisherman's vanilla
 Barrel and nearby Campfire, a guaranteed shoreline fishing basin, a renewable
 Mangrove Lumberyard with a bamboo processing shed, Woodcutter, Smithing Table,
 log stacks and vine trellis, plus a mud-brick-and-bamboo covered sixteen-step
-spiral Mine with Furnace and renewable deep seam. The
+spiral Mine with Furnace and a persisted, progressively descending working
+face. The
 Fisherman claims the Barrel POI; the Campfire is a required nearby processing
 block. Existing worlds whose Fishermen directly remembered a Campfire remain
 compatible.
@@ -525,12 +535,13 @@ partial settlement. Once completed it never spawns a second founding group;
 dead villagers, destroyed workstations and consumed supplies are not silently
 replaced.
 
-### Verified four-role steady state
+### Verified four-role long-horizon operation
 
 With a loaded generated village, intact facilities and unchanged live recipes,
-the Fisherman → food market → Toolsmith → Lumberjack/Miner loop has no modeled
-finite resource countdown. Fish renews food; the deep seam renews stone and
-bounded incidental metal; the generated rooted oak plot renews logs; logs and the founding
+the Fisherman → food market → Toolsmith → Lumberjack/Miner loop remains
+demand-driven for the available mine depth. Fish renews food; progressive
+excavation supplies stone and bounded incidental metal until the world floor or
+a safety obstruction; the generated rooted oak plot renews logs; logs and the founding
 ignition reserve establish charcoal; the trellis renews fibre; iron renews
 shears and tools; and every internal payment moves existing emerald items.
 Production stops at bounded stock targets and resumes only after consumption.
@@ -543,9 +554,10 @@ This is enforced by a configurable long GameTest rather than inferred from a
 short successful run. Three different ore sequences (`0x5EEDBEEF`, `0xC0FFEE`
 and `0x1234ABCD`) each completed 10,000 simulated days with all 32 founding
 emeralds conserved at the end of every phase, no stock or slot bound exceeded,
-the stone face and vine mother source intact, and new food, mining, logging,
+the test-harness mining supply and vine mother source available, and new food, mining, logging,
 charcoal, Furnace replacement, fuel and tool activity in the final 500 days.
-"Steady state" assumes the village stays loaded and alive: chunk unloading,
+This compressed economy soak does not claim unlimited physical world depth.
+Long-horizon operation assumes the village stays loaded and alive: chunk unloading,
 death, player damage, protection vetoes or a data pack removing a required
 recipe correctly pauses the affected work instead of bypassing it.
 

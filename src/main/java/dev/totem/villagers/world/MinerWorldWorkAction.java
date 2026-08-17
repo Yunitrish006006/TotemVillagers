@@ -3,9 +3,6 @@ package dev.totem.villagers.world;
 import dev.totem.villagers.inventory.VillagerWorkInventory;
 import dev.totem.villagers.runtime.VillageProductionStockPolicy;
 import dev.totem.villagers.work.WorkOrder;
-import dev.totem.villagers.worker.BlockCoordinate;
-import dev.totem.villagers.worker.WorkerAssignmentSavedData;
-import dev.totem.villagers.worldgen.GeneratedVillageSavedData;
 import dev.totem.villagers.world.ore.MinerIncidentalOreDefinitions;
 import dev.totem.villagers.world.ore.MinerIncidentalOreRule;
 import dev.totem.villagers.world.ore.MinerOreSafetySavedData;
@@ -59,7 +56,7 @@ public final class MinerWorldWorkAction {
             return false;
         }
         MiningPlan plan = planned.get();
-        boolean renewableGeneratedFace = isRenewableGeneratedMineFace(level, miner, target, original, order);
+        Optional<GeneratedMineExpansion.Plan> extension = GeneratedMineExpansion.plan(level, miner, target);
         Optional<dev.totem.villagers.inventory.WorkInventory.Reservation> reserved =
                 inventory.reserveExactMatchingItem(plan.tool());
         if (reserved.isEmpty()) {
@@ -78,55 +75,17 @@ public final class MinerWorldWorkAction {
             reserved.get().rollback();
             return false;
         }
-        if (renewableGeneratedFace) {
-            level.setBlock(target, original, 3);
-            if (!level.getBlockState(target).equals(original)) {
-                reserved.get().rollback();
-                return false;
-            }
-        }
         if (reserved.get().commitWithReturns(returned)) {
             MinerOreSafetySavedData.forServer(level.getServer())
                     .recordMine(miner.getUUID(), plan.incidentalIron());
+            extension.ifPresent(plannedExtension -> plannedExtension.apply(level));
             miner.swing(InteractionHand.MAIN_HAND);
             miner.playWorkSound();
             return true;
         }
-        if (!renewableGeneratedFace) {
-            level.setBlock(target, original, 3);
-        }
+        level.setBlock(target, original, 3);
         reserved.get().rollback();
         return false;
-    }
-
-    /**
-     * Only the deliberately placed stone faces of a persisted world-generated village mine are deep seams. A
-     * player-created Miner zone still consumes ordinary terrain normally, while an unattended generated village can
-     * keep the one cobblestone input that closes its charcoal, furnace and replacement-tool cycle.
-     */
-    private static boolean isRenewableGeneratedMineFace(ServerLevel level, Villager miner, BlockPos target,
-                                                        BlockState original, WorkOrder order) {
-        if (!original.is(Blocks.STONE) || !"minecraft:cobblestone".equals(order.output().itemId())) {
-            return false;
-        }
-        WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(level.getServer());
-        Optional<java.util.UUID> zoneId = assignments.getAssignment(miner.getUUID())
-                .filter(assignment -> "totem:miner".equals(assignment.roleId()))
-                .flatMap(assignment -> assignment.workZoneId());
-        if (zoneId.isEmpty()) {
-            return false;
-        }
-        boolean targetInsideAssignedMine = assignments.getZone(zoneId.orElseThrow())
-                .filter(zone -> "totem:miner".equals(zone.roleId()))
-                .filter(zone -> zone.zone().contains(level.dimension().identifier().toString(),
-                        new BlockCoordinate(target.getX(), target.getY(), target.getZ())))
-                .isPresent();
-        if (!targetInsideAssignedMine) {
-            return false;
-        }
-        return GeneratedVillageSavedData.forServer(level.getServer()).snapshot().stream()
-                .filter(village -> village.dimensionId().equals(level.dimension().identifier().toString()))
-                .anyMatch(village -> village.minerZoneId().filter(zoneId.orElseThrow()::equals).isPresent());
     }
 
     /** Chooses the strongest personal pickaxe that produces a real loot-table result for this block. */

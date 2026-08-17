@@ -224,10 +224,17 @@ descending shaft whose retained stone faces satisfy the current live Miner
 order. If either complete site cannot be placed safely, that role SHALL remain
 absent rather than overwriting village or player blocks.
 
-Only a retained stone face inside the persisted Miner Zone of that generated
-village SHALL act as a renewable deep seam. Its successful live-loot commit
-SHALL preserve the same stone face while consuming real pickaxe durability;
-ordinary and player-created Miner Zones SHALL consume terrain normally. The
+Each successful live-loot commit on an exposed face inside the persisted Miner
+Zone of that generated village SHALL consume that source and attempt to append
+one lower tread following the original covered 5×5 spiral. The tread SHALL
+provide its cobblestone stair, three-block head clearance, roof, inner guard
+rail and a natural outward face reachable from the preceding landing. The
+system SHALL lower the persisted Zone boundary only after the complete change
+succeeds. It SHALL refuse fluids, containers, live entities, protected or
+unloaded cells, unsafe materials and construction below the world floor. A
+blocked extension SHALL NOT restore the already committed source. Ordinary and
+player-created Miner Zones SHALL consume terrain normally without constructing
+or expanding a shaft. The
 Toolsmith MAY repeatedly clip only the lower segment of the generated trellis,
 crediting its live shears drop and consuming one real shears durability while
 preserving the upper mother segment. Three physical plant fibres SHALL become
@@ -288,19 +295,29 @@ unstaffed rather than convert the village's only Farmer.
 - **THEN** the system establishes one tree, Woodcutter and fibre-trellis recovery site;
   otherwise the role remains absent without overwriting blocks.
 
-#### Scenario: Generated deep seam remains physical and renewable
+#### Scenario: Generated Mine descends through physical excavation
 
-- **WHEN** a generated village Miner successfully works a retained stone face
+- **WHEN** a generated village Miner successfully works an exposed stone face
   inside its persisted generated Mine Zone
 - **THEN** its live cobblestone and bounded incidental-ore results enter the
-  personal inventory, its exact pickaxe loses one durability, and the visible
-  stone face remains available for a later demand-driven cycle.
+  personal inventory, its exact pickaxe loses one durability, the visible source
+  remains destroyed, one walkable covered spiral tread is added below, and the
+  persisted Mine Zone includes that new layer for later work and restart.
+
+#### Scenario: Unsafe next layer stops construction without undoing work
+
+- **WHEN** a generated village Miner commits a valid source but the next tread
+  would cross protected terrain, fluid, a container, a live entity, an unloaded
+  cell, an unsafe material or the world floor
+- **THEN** the mined source remains consumed and its physical output remains
+  committed, but no partial tread is left and the Mine Zone boundary is not
+  lowered.
 
 #### Scenario: Manual mine remains finite
 
 - **WHEN** the same Miner works stone in a player-created or non-generated Zone
 - **THEN** the source block is consumed normally and is never restored by the
-  generated-village deep-seam rule.
+  generated-village progressive-shaft rule.
 
 #### Scenario: Generated trellis closes the fishing-rod loop
 

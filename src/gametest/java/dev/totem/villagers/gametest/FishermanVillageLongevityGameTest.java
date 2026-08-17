@@ -186,14 +186,17 @@ public final class FishermanVillageLongevityGameTest {
                         level, miner, minerInventory, stoneOrder); mined++) {
                     ensureTool(helper, server, minerInventory, toolsmithInventory, ToolFamily.PICKAXE, counters, day);
                     OreCounts before = oreCounts(minerInventory);
+                    // Geometry progression has its own live GameTest. This compressed economy soak supplies
+                    // one successive face per iteration without constructing thousands of world blocks.
+                    level.setBlock(mineFace, Blocks.STONE.defaultBlockState(), 3);
                     miner.setPos(mineFace.getX() + 0.5D, mineFace.getY(), mineFace.getZ() - 0.5D);
                     boolean minedFace = mining.complete(level, miner, mineFace, MINER_TARGETS, stoneOrder, minerInventory);
                     miner.setPos(minerHomeX, minerHomeY, minerHomeZ);
                     require(helper, minedFace,
-                            "Miner could not extract its generated deep-seam stone on day " + day + "; "
+                            "Miner could not extract its next generated-Mine face on day " + day + "; "
                                     + snapshot(village, inventories));
-                    require(helper, level.getBlockState(mineFace).is(Blocks.STONE),
-                            "Generated deep-seam face was depleted on day " + day);
+                    require(helper, level.getBlockState(mineFace).isAir(),
+                            "Generated-Mine face was restored instead of consumed on day " + day);
                     counters.credit(oreCounts(minerInventory).minus(before));
                     counters.stone++;
                 }

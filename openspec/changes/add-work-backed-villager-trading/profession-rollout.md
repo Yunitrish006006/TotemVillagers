@@ -51,6 +51,13 @@ for one emerald. These rows are available only while the exact physical sale
 batch remains, and the post-trade authority consumes that batch directly; no
 virtual restock is created.
 
+A generated-village Mine never restores a worked face. Each successful source
+commit attempts to append one deeper covered tread using the original 5×5
+spiral geometry and persists the Work Zone's new lower boundary. Unsafe,
+protected, occupied, fluid, unloaded and below-world construction is rejected
+without rebuilding the source already mined; player-created Mine Zones never
+gain automatic shaft construction.
+
 ## Village hunger and food market
 
 Totem nutrition persists the same food, saturation, exhaustion and timer state

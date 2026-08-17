@@ -52,10 +52,11 @@ not hard-coded into the scheduler. Initial roles are:
 
 - **Miner** (new): obtains ore and stone-order inputs only from an explicitly
   assigned Mine Work Zone. It never mines arbitrary player blocks; every target
-  must satisfy the configured natural/renewable source and protection rules.
-  Only a persisted world-generated village Mine Zone marks its deliberately
-  placed stone faces as renewable deep seams; manually configured zones remain
-  finite terrain.
+  must satisfy the configured natural-source and protection rules. A persisted
+  world-generated village Mine consumes its exposed face and safely appends one
+  tread following the original covered 5×5 spiral, then persists the Zone's new
+  lower boundary. Manually configured zones remain finite terrain and do not
+  create structures.
 - **Lumberjack** (new): gathers logs and saplings only from an explicitly
   assigned Forest Work Zone, processes reachable mature trees one at a time,
   and replants a valid sapling before considering the tree cycle complete.
@@ -99,7 +100,7 @@ before the world changes. Direct inventory access is not exposed. Players intera
 ordinary villager trading screen only; autonomous delivery moves real stacks
 between villagers without a shared warehouse.
 
-World gathering is restricted to order-defined renewable/legitimate targets
+World gathering is restricted to order-defined renewable or legitimate targets
 and assigned work zones; no generic block breaking is introduced. Profession
 coverage not naturally gatherable in the world remains completable through an
 appropriate work-order transformation using Workshop inputs.
@@ -112,15 +113,17 @@ the source if the insertion cannot complete. Later workshop and Builder work
 can consume those physical materials; no merchant-stock entry is created by the
 same mining or logging cycle.
 
-Generated villages additionally receive two explicit closed-loop sources. A
-deep-seam stone face is restored only after its live loot, bounded incidental
-ore and pickaxe wear commit atomically. The Lumberyard carries a two-segment
-vine trellis whose lower segment can be repeatedly trimmed with physical
-shears while its upper mother segment remains. Both paths remain demand-driven,
-respect the same protection and loaded-chunk checks, and stop if their generated
-village identity or physical facility is removed. This keeps unattended
-settlements renewable without turning player-created work zones into generic
-resource generators.
+Generated villages additionally receive two explicit long-running sources. A
+Mine action consumes its exposed face after live loot, bounded incidental ore
+and pickaxe wear commit atomically. It then appends one deeper stair, headroom,
+roof and inner rail using the original spiral geometry and persists the Zone
+lower bound. Construction refuses fluids, containers, live entities, protected
+or unloaded cells, unsafe materials and the world floor. The Lumberyard carries
+a two-segment vine trellis whose lower segment can be repeatedly trimmed with
+physical shears while its upper mother segment remains. Both paths remain
+demand-driven and stop if their generated-village identity or physical facility
+is removed. This gives unattended settlements progressive excavation without
+turning player-created work zones into generic resource or structure generators.
 
 The generated Lumberyard is also a persisted rooted nursery. It may restore
 the work order's replacement sapling after an otherwise valid atomic harvest

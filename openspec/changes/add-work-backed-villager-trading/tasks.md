@@ -87,8 +87,8 @@
 - [x] 3.11 Extend physical replacement-tool circulation to Miner pickaxes and
   Lumberjack axes; make complete-tree work reserve and wear the exact carried
   axe, and pause either resource worker when its usable tool is exhausted.
-- [x] 3.12 Close the unattended generated-village loop with renewable generated
-  deep-seam stone, bounded live-profile incidental ore, persistent iron-drought
+- [x] 3.12 Close the unattended generated-village loop with generated Mine
+  stone, bounded live-profile incidental ore, persistent iron-drought
   protection, renewable trellis fibre, live-recipe shears/string/rod work,
   renewable charcoal and physically conserved pooled emerald payments.
 - [x] 3.13 Bind a generated Lumberjack's Woodcutter demand to its own persisted
@@ -109,6 +109,10 @@
   atomically transferring equal four-emerald and three-bread shares from both
   parents; persist birth provenance so insufficient funds, reloads and
   generated-village bounds can never mint or repeat the endowment.
+- [x] 3.18 Replace restored generated-Mine faces with physical progressive
+  excavation: consume the visible source, append one safe tread using the
+  original covered 5×5 spiral, persist the Zone's lower boundary, and leave
+  manual zones finite without automatic construction.
 
 ## 4. Verification and delivery
 
@@ -125,5 +129,5 @@
   strict OpenSpec validation and release builds; record artifact hashes.
 - [x] 4.5 Run the four-role generated-village steady-state probe for 10,000 days
   on three ore seeds, asserting every-phase emerald conservation, bounded food,
-  material and slot usage, persistent renewable sources and fresh activity in
-  the final 500-day window.
+  material and slot usage, renewable non-mine sources, a controlled progressive-
+  mining supply and fresh activity in the final 500-day window.

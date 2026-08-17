@@ -562,6 +562,27 @@ The final verification pass used Java 25 and the release artifacts in
   --no-interactive` was not executed because the `openspec` executable remains
   unavailable on this host; no validation pass is claimed.
 
+## Incremental verification — 2026-08-17 (progressive generated Mine)
+
+- Generated-village mining now consumes the visible source and appends one
+  lower covered tread using the original 5×5 spiral geometry. The lower Work
+  Zone boundary is persisted after the complete stair, headroom, roof and rail
+  transaction succeeds; manual zones never construct a shaft.
+- Live GameTests prove two consecutive faces remain air, two new stairs have
+  the expected orientation and path, tool wear and physical cobblestone remain
+  exact, and protected next-layer terrain prevents all extension without
+  restoring the already committed source. The old wide bootstrap fixture now
+  declares 44 blocks of padding so parallel tests cannot overlap its scan area.
+- `./gradlew check sourcesJar` — passed on Java 25: all 71 JUnit tests and all
+  124 required server GameTests passed for version `0.1.29`.
+- `./gradlew runClientGameTest` — passed. The fixed-seed natural singleplayer
+  Mangrove village requires a real Miner work cycle and observes the persisted
+  Mine Zone minimum Y decrease rather than accepting tool wear alone.
+- `./gradlew jar` — passed and produced the versioned runtime artifact below.
+- `openspec validate add-work-backed-villager-trading --strict
+  --no-interactive` was not executed because the `openspec` executable remains
+  unavailable on this host; no validation pass is claimed.
+
 ## SHA-512 artifacts
 
 | Artifact | SHA-512 |
@@ -604,3 +625,5 @@ The final verification pass used Java 25 and the release artifacts in
 | `totem-villagers-0.1.21-sources.jar` | `d2da207cb9361df527eb0ea70c99dc60e9dc6eb90892042d34ef44d85e142c689a037fc4734152bce56fc28828e96cb18a11611ef20374677dbf8e1388cb2449` |
 | `totem-villagers-0.1.26.jar` | `93621a994077d500ba0c2cebc797382dc5e135256c7438fd6ca0034e37c1c56eefb33f6726167c700dbc6dd97273d1802f72e5407ee1a20ae20ada5ed27adfe2` |
 | `totem-villagers-0.1.26-sources.jar` | `9f5be40093beb585158e9e06af41d4fe5ebd5f0c6ecc22a189112dd2c44a306f8b055082493e476f4baca3593441f873faf875b19888d7166b8985f40588eebc` |
+| `totem-villagers-0.1.29.jar` | `b0390d7152b0d6e866e474878baaffe50b2d62713edf7a00e9d32e1a04b2fd98da7a107765478d5348b04e7310227571efaf123496042d142c474965aaa4751c` |
+| `totem-villagers-0.1.29-sources.jar` | `edd480cd7987573e1882f3011f6cf0f0fdb96214b35ab6b6e99441a51f5d1460bf011576cd32cb41d3430f3d83d6ebfa6f894029db1f9ad21b8423d730b54ac1` |

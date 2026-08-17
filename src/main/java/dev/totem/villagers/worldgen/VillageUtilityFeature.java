@@ -103,9 +103,32 @@ public final class VillageUtilityFeature extends Feature<NoneFeatureConfiguratio
     }
 
     public static BlockPos mineLanding(BlockPos furnace, int step) {
-        int[] coordinate = SPIRAL[step];
-        return mineCenter(furnace).relative(mineDirection(), coordinate[0])
-                .relative(mineDirection().getClockWise(), coordinate[1]).below(step);
+        return mineLanding(furnace, mineDirection(), step);
+    }
+
+    /** Resolves any persisted spiral step, including layers added after world generation. */
+    public static BlockPos mineLanding(BlockPos furnace, Direction direction, int step) {
+        int[] coordinate = spiralCoordinate(step);
+        return furnace.relative(direction, MINE_RADIUS + 1).relative(direction, coordinate[0])
+                .relative(direction.getClockWise(), coordinate[1]).below(step);
+    }
+
+    public static Direction mineInwardDirection(Direction direction, int step) {
+        return inwardDirection(direction, spiralCoordinate(step));
+    }
+
+    public static Direction mineOutwardDirection(Direction direction, int step) {
+        return mineInwardDirection(direction, step).getOpposite();
+    }
+
+    public static Direction mineDescentDirection(Direction direction, int step) {
+        int[] current = spiralCoordinate(step);
+        int[] next = spiralCoordinate(step + 1);
+        int forwardDelta = next[0] - current[0];
+        if (forwardDelta != 0) {
+            return forwardDelta > 0 ? direction : direction.getOpposite();
+        }
+        return next[1] - current[1] > 0 ? direction.getClockWise() : direction.getClockWise().getOpposite();
     }
 
     /** The side entrance shared by the Oak and Mangrove mine palettes. */
@@ -184,7 +207,7 @@ public final class VillageUtilityFeature extends Feature<NoneFeatureConfiguratio
             set(level, clip, landing.above(2), Blocks.AIR.defaultBlockState());
             set(level, clip, landing.above(3), Blocks.COBBLESTONE.defaultBlockState());
             set(level, clip, floor, Blocks.COBBLESTONE_STAIRS.defaultBlockState()
-                    .setValue(StairBlock.FACING, descentDirection(direction, step).getOpposite()));
+                    .setValue(StairBlock.FACING, mineDescentDirection(direction, step).getOpposite()));
             // The first outer mining face is the Furnace itself.  It must
             // remain a workstation, just as the runtime starter leaves that
             // entry face intact for the Miner.
@@ -347,15 +370,11 @@ public final class VillageUtilityFeature extends Feature<NoneFeatureConfiguratio
         return inwardDirection(forward, coordinate).getOpposite();
     }
 
-    private static Direction descentDirection(Direction forward, int step) {
-        int source = step == SPIRAL.length - 1 ? step - 1 : step;
-        int[] current = SPIRAL[source];
-        int[] next = SPIRAL[source + 1];
-        int forwardDelta = next[0] - current[0];
-        if (forwardDelta != 0) {
-            return forwardDelta > 0 ? forward : forward.getOpposite();
+    private static int[] spiralCoordinate(int step) {
+        if (step < 0) {
+            throw new IllegalArgumentException("Mine step must not be negative");
         }
-        return next[1] - current[1] > 0 ? forward.getClockWise() : forward.getClockWise().getOpposite();
+        return SPIRAL[step % SPIRAL.length];
     }
 
     private static BlockPos mineHeadOffset(

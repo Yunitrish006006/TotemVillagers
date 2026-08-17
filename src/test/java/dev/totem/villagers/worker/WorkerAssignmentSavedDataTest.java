@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -35,5 +36,18 @@ class WorkerAssignmentSavedDataTest {
 
         assertTrue(data.assignZone(owner, builder, construction.id()));
         assertTrue(data.getAssignment(builder.villagerId()).orElseThrow().workZoneId().isPresent());
+    }
+
+    @Test
+    void generatedMinerZoneCanOnlyExtendOneLayerDownAtATime() {
+        UUID owner = UUID.fromString("00000000-0000-0000-0000-000000000721");
+        WorkerAssignmentSavedData data = new WorkerAssignmentSavedData();
+        WorkZoneRecord mine = data.createZone("totem:miner", new WorkZone(owner, "minecraft:overworld",
+                new BlockCoordinate(0, 48, 0), new BlockCoordinate(6, 67, 6)));
+
+        assertFalse(data.extendMinerZoneDownward(mine.id(), 46));
+        assertTrue(data.extendMinerZoneDownward(mine.id(), 47));
+        assertEquals(47, data.getZone(mine.id()).orElseThrow().zone().minimum().y());
+        assertFalse(data.extendMinerZoneDownward(mine.id(), 47));
     }
 }

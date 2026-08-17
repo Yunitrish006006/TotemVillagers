@@ -19,8 +19,11 @@ import dev.totem.villagers.world.ore.MinerIncidentalOreRule;
 import dev.totem.villagers.world.ore.MinerOreSafetySavedData;
 import dev.totem.villagers.worldgen.GeneratedVillageSavedData;
 import dev.totem.villagers.worldgen.GeneratedVillageState;
+import dev.totem.villagers.worldgen.VillageUtilityFeature;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -28,6 +31,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.item.ItemStack;
@@ -35,7 +39,9 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 import java.util.List;
 import java.util.Optional;
@@ -98,44 +104,63 @@ public final class WorldMaterialDeliveryGameTest {
         }
     }
 
-    @GameTest(maxTicks = 40)
-    public void generatedVillageDeepSeamRestoresWhileYieldingPhysicalStone(GameTestHelper helper) {
-        BlockPos target = helper.absolutePos(new BlockPos(8, 2, 8));
-        Villager miner = spawnVillager(helper, new BlockPos(7, 2, 8));
+    @GameTest(maxTicks = 40, padding = 20)
+    public void generatedVillageMiningConsumesFacesAndExtendsItsSpiralDownward(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos furnace = helper.absolutePos(new BlockPos(8, 20, 8));
+        Direction direction = VillageUtilityFeature.mineDirection();
+        fillExtensionTerrain(level, furnace);
+        require(helper, VillageUtilityFeature.placeMine(level, furnace, BoundingBox.infinite()),
+                "Could not place the generated Mine fixture");
+        BlockPos firstTarget = VillageUtilityFeature.mineLanding(furnace, direction, 2)
+                .relative(VillageUtilityFeature.mineOutwardDirection(direction, 2));
+        BlockPos secondTarget = VillageUtilityFeature.mineLanding(furnace, direction, 3)
+                .relative(VillageUtilityFeature.mineOutwardDirection(direction, 3));
+        Villager miner = spawnVillager(helper, new BlockPos(1, 2, 1));
         var server = helper.getLevel().getServer();
         WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(server);
         GeneratedVillageSavedData villages = GeneratedVillageSavedData.forServer(server);
-        String villageId = "game-test-deep-seam-" + UUID.randomUUID();
-        BlockCoordinate coordinate = new BlockCoordinate(target.getX(), target.getY(), target.getZ());
+        String villageId = "game-test-progressive-mine-" + UUID.randomUUID();
+        BlockCoordinate minimum = new BlockCoordinate(furnace.getX(), furnace.getY() - 16, furnace.getZ() - 3);
+        BlockCoordinate maximum = new BlockCoordinate(furnace.getX() + 6, furnace.getY() + 3, furnace.getZ() + 3);
         WorkZoneRecord zone = assignments.createZone("totem:miner", new WorkZone(UUID.randomUUID(),
-                helper.getLevel().dimension().identifier().toString(), coordinate, coordinate));
+                level.dimension().identifier().toString(), minimum, maximum));
         try {
             setProfession(miner, "totem", "miner");
             assignments.putAssignment(new WorkerAssignment(miner.getUUID(), "totem:miner",
                     Optional.of(zone.id()), Optional.empty()));
             villages.discover(new GeneratedVillageState(villageId,
-                    helper.getLevel().dimension().identifier().toString(), coordinate, coordinate, false,
+                    level.dimension().identifier().toString(), minimum, maximum, false,
                     Optional.empty(), Optional.empty(), Optional.of(zone.id())));
-            helper.getLevel().setBlock(target, Blocks.STONE.defaultBlockState(), 3);
+            miner.getBrain().setMemory(MemoryModuleType.JOB_SITE, GlobalPos.of(level.dimension(), furnace));
             VillagerWorkInventory inventory = VillagerWorkInventorySavedData.forServer(server)
                     .inventory(miner.getUUID());
-            require(helper, inventory.insertExact(new ItemStack(Items.IRON_PICKAXE)),
-                    "Could not give the generated-mine Miner an iron pickaxe");
+            require(helper, level.getBlockState(firstTarget).is(Blocks.STONE)
+                            && level.getBlockState(secondTarget).is(Blocks.STONE)
+                            && inventory.insertExact(new ItemStack(Items.IRON_PICKAXE)),
+                    "Could not prepare the progressive generated-Mine fixture");
             MinerWorldWorkAction noRandomOre = new MinerWorldWorkAction(() -> 9_999);
 
-            require(helper, noRandomOre.complete(helper.getLevel(), miner, target, MINER_TARGETS,
-                            minerOrder(), inventory)
-                            && noRandomOre.complete(helper.getLevel(), miner, target, MINER_TARGETS,
-                            minerOrder(), inventory),
-                    "Generated village deep seam could not be mined twice without test-side block replacement");
-            require(helper, helper.getLevel().getBlockState(target).is(Blocks.STONE),
-                    "Generated village deep seam was permanently depleted");
+            BlockPos firstLanding = VillageUtilityFeature.mineLanding(furnace, direction, 2);
+            miner.setPos(firstLanding.getX() + 0.5D, firstLanding.getY(), firstLanding.getZ() + 0.5D);
+            require(helper, noRandomOre.complete(level, miner, firstTarget, MINER_TARGETS, minerOrder(), inventory),
+                    "Generated Mine could not consume its first physical work face");
+            assertExtendedMineStep(helper, assignments, zone.id(), furnace, direction, miner, 16);
+
+            BlockPos secondLanding = VillageUtilityFeature.mineLanding(furnace, direction, 3);
+            miner.setPos(secondLanding.getX() + 0.5D, secondLanding.getY(), secondLanding.getZ() + 0.5D);
+            require(helper, noRandomOre.complete(level, miner, secondTarget, MINER_TARGETS, minerOrder(), inventory),
+                    "Generated Mine could not consume its second physical work face");
+            assertExtendedMineStep(helper, assignments, zone.id(), furnace, direction, miner, 17);
+
+            require(helper, level.getBlockState(firstTarget).isAir() && level.getBlockState(secondTarget).isAir(),
+                    "Generated Mine restored a consumed work face instead of leaving a real excavation");
             require(helper, count(inventory.snapshot(), Items.COBBLESTONE) == 2,
-                    "Two deep-seam work cycles did not yield exactly two physical cobblestone");
+                    "Two progressive Mine cycles did not yield exactly two physical cobblestone");
             ItemStack tool = inventory.snapshot().stream().filter(stack -> stack.is(Items.IRON_PICKAXE))
                     .findFirst().orElse(ItemStack.EMPTY);
             require(helper, !tool.isEmpty() && tool.getDamageValue() == 2,
-                    "Renewable deep seam bypassed normal tool durability");
+                    "Progressive Mine extension bypassed normal tool durability");
             helper.succeed();
         } finally {
             assignments.removeAssignment(miner.getUUID());
@@ -143,6 +168,59 @@ public final class WorldMaterialDeliveryGameTest {
             villages.remove(villageId);
             MinerOreSafetySavedData.forServer(server).remove(miner.getUUID());
             VillagerWorkInventorySavedData.forServer(server).drain(miner.getUUID());
+            miner.discard();
+        }
+    }
+
+    @GameTest(maxTicks = 40, padding = 20)
+    public void protectedNextLayerStopsMineExtensionWithoutRestoringTheConsumedFace(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos furnace = helper.absolutePos(new BlockPos(8, 20, 8));
+        Direction direction = VillageUtilityFeature.mineDirection();
+        fillExtensionTerrain(level, furnace);
+        require(helper, VillageUtilityFeature.placeMine(level, furnace, BoundingBox.infinite()),
+                "Could not place the protected generated-Mine fixture");
+        BlockPos target = VillageUtilityFeature.mineLanding(furnace, direction, 2)
+                .relative(VillageUtilityFeature.mineOutwardDirection(direction, 2));
+        BlockPos protectedFloor = VillageUtilityFeature.mineLanding(furnace, direction, 16).below();
+        Villager miner = spawnVillager(helper, new BlockPos(1, 2, 1));
+        WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(level.getServer());
+        GeneratedVillageSavedData villages = GeneratedVillageSavedData.forServer(level.getServer());
+        String villageId = "game-test-protected-mine-extension-" + UUID.randomUUID();
+        BlockCoordinate minimum = new BlockCoordinate(furnace.getX(), furnace.getY() - 16, furnace.getZ() - 3);
+        BlockCoordinate maximum = new BlockCoordinate(furnace.getX() + 6, furnace.getY() + 3, furnace.getZ() + 3);
+        WorkZoneRecord zone = assignments.createZone("totem:miner", new WorkZone(UUID.randomUUID(),
+                level.dimension().identifier().toString(), minimum, maximum));
+        try {
+            setProfession(miner, "totem", "miner");
+            assignments.putAssignment(new WorkerAssignment(miner.getUUID(), "totem:miner",
+                    Optional.of(zone.id()), Optional.empty()));
+            villages.discover(new GeneratedVillageState(villageId, level.dimension().identifier().toString(),
+                    minimum, maximum, false, Optional.empty(), Optional.empty(), Optional.of(zone.id())));
+            miner.getBrain().setMemory(MemoryModuleType.JOB_SITE, GlobalPos.of(level.dimension(), furnace));
+            BlockPos landing = VillageUtilityFeature.mineLanding(furnace, direction, 2);
+            miner.setPos(landing.getX() + 0.5D, landing.getY(), landing.getZ() + 0.5D);
+            VillagerWorkInventory inventory = VillagerWorkInventorySavedData.forServer(level.getServer())
+                    .inventory(miner.getUUID());
+            require(helper, inventory.insertExact(new ItemStack(Items.IRON_PICKAXE)),
+                    "Could not give the protected-Mine Miner an iron pickaxe");
+            PROTECTED_TARGET.set(protectedFloor);
+
+            require(helper, new MinerWorldWorkAction(() -> 9_999).complete(
+                            level, miner, target, MINER_TARGETS, minerOrder(), inventory),
+                    "Protected next layer incorrectly prevented the current physical face from being mined");
+            require(helper, level.getBlockState(target).isAir()
+                            && level.getBlockState(protectedFloor).is(Blocks.STONE)
+                            && assignments.getZone(zone.id()).orElseThrow().zone().minimum().y() == minimum.y(),
+                    "Protected Mine extension changed its blocked layer, restored its source, or expanded its Zone");
+            helper.succeed();
+        } finally {
+            PROTECTED_TARGET.set(null);
+            assignments.removeAssignment(miner.getUUID());
+            assignments.removeZone(zone.id());
+            villages.remove(villageId);
+            MinerOreSafetySavedData.forServer(level.getServer()).remove(miner.getUUID());
+            VillagerWorkInventorySavedData.forServer(level.getServer()).drain(miner.getUUID());
             miner.discard();
         }
     }
@@ -660,6 +738,44 @@ public final class WorldMaterialDeliveryGameTest {
                 tagId -> substrate.is(TagKey.create(Registries.BLOCK, Identifier.parse(tagId))),
                 tagId -> level.getBiome(target).is(TagKey.create(Registries.BIOME, Identifier.parse(tagId))),
                 () -> roll).orElse(null);
+    }
+
+    private static void fillExtensionTerrain(ServerLevel level, BlockPos furnace) {
+        for (int x = furnace.getX() - 1; x <= furnace.getX() + 7; x++) {
+            for (int y = furnace.getY() - 19; y <= furnace.getY() - 13; y++) {
+                for (int z = furnace.getZ() - 4; z <= furnace.getZ() + 4; z++) {
+                    level.setBlock(new BlockPos(x, y, z), Blocks.STONE.defaultBlockState(), 3);
+                }
+            }
+        }
+    }
+
+    private static void assertExtendedMineStep(GameTestHelper helper, WorkerAssignmentSavedData assignments,
+                                               UUID zoneId, BlockPos furnace, Direction direction,
+                                               Villager miner, int step) {
+        BlockPos landing = VillageUtilityFeature.mineLanding(furnace, direction, step);
+        BlockPos floor = landing.below();
+        Direction inward = VillageUtilityFeature.mineInwardDirection(direction, step);
+        BlockState stair = helper.getLevel().getBlockState(floor);
+        require(helper, helper.getLevel().getBlockState(landing).isAir()
+                        && helper.getLevel().getBlockState(landing.above()).isAir()
+                        && helper.getLevel().getBlockState(landing.above(2)).isAir()
+                        && stair.is(Blocks.COBBLESTONE_STAIRS)
+                        && stair.getValue(StairBlock.FACING)
+                        == VillageUtilityFeature.mineDescentDirection(direction, step).getOpposite()
+                        && helper.getLevel().getBlockState(landing.above(3)).is(Blocks.COBBLESTONE)
+                        && helper.getLevel().getBlockState(landing.relative(inward).below()).is(Blocks.COBBLESTONE)
+                        && helper.getLevel().getBlockState(landing.relative(inward)).is(Blocks.OAK_FENCE)
+                        && helper.getLevel().getBlockState(landing.relative(inward.getOpposite())).is(MINER_TARGETS),
+                "Generated Mine extension did not reproduce spiral stair " + step);
+        require(helper, assignments.getZone(zoneId).orElseThrow().zone().minimum().y() == floor.getY(),
+                "Generated Mine extension did not persist its new lower Work Zone boundary at step " + step);
+        BlockPos previousLanding = VillageUtilityFeature.mineLanding(furnace, direction, step - 1);
+        BlockPos nextFace = landing.relative(inward.getOpposite());
+        miner.setPos(previousLanding.getX() + 0.5D, previousLanding.getY(), previousLanding.getZ() + 0.5D);
+        miner.setOnGround(true);
+        require(helper, WorldWorkNavigation.pathToReach(helper.getLevel(), miner, nextFace).isPresent(),
+                "Generated Mine extension did not connect spiral stair " + step + " to its next physical work face");
     }
 
     @SuppressWarnings("unchecked")

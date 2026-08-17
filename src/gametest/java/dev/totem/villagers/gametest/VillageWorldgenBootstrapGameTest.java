@@ -478,7 +478,7 @@ public final class VillageWorldgenBootstrapGameTest {
         });
     }
 
-    @GameTest(maxTicks = 40)
+    @GameTest(maxTicks = 40, padding = 44)
     public void generatedVillageBootstrapCreatesLumberyardAndMinerStarter(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(server);

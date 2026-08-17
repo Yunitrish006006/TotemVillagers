@@ -92,37 +92,55 @@ public final class MangroveVillageNaturalWorldClientGameTest implements FabricCl
     }
 
     private static List<NaturalVillage> naturalMangroveVillages(TestSingleplayerContext singleplayer) {
-        return singleplayer.getServer().computeOnServer(server -> GeneratedVillageSavedData.forServer(server).snapshot().stream()
-                .filter(village -> village.id().contains("|totem:mangrove_village|"))
-                .filter(village -> village.minerZoneId().isPresent() && village.lumberjackZoneId().isPresent())
-                .map(MangroveVillageNaturalWorldClientGameTest::naturalVillage)
-                .sorted(Comparator.comparing(NaturalVillage::id))
-                .toList());
+        return singleplayer.getServer().computeOnServer(server -> {
+            WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(server);
+            return GeneratedVillageSavedData.forServer(server).snapshot().stream()
+                    .filter(village -> village.id().contains("|totem:mangrove_village|"))
+                    .filter(village -> village.minerZoneId().isPresent() && village.lumberjackZoneId().isPresent())
+                    .filter(village -> assignments.getZone(village.minerZoneId().orElseThrow()).isPresent())
+                    .map(village -> naturalVillage(village, assignments.getZone(village.minerZoneId().orElseThrow())
+                            .orElseThrow().zone().minimum().y()))
+                    .sorted(Comparator.comparing(NaturalVillage::id))
+                    .toList();
+        });
     }
 
-    private static NaturalVillage naturalVillage(GeneratedVillageState village) {
+    private static NaturalVillage naturalVillage(GeneratedVillageState village, int initialMineMinimumY) {
         return new NaturalVillage(village.id(), new BlockPos(
                 (village.minimum().x() + village.maximum().x()) / 2,
                 Math.max(village.minimum().y(), 64),
                 (village.minimum().z() + village.maximum().z()) / 2),
                 village.minimum().x(), village.minimum().y(), village.minimum().z(),
                 village.maximum().x(), village.maximum().y(), village.maximum().z(),
-                village.minerZoneId().orElseThrow(), village.lumberjackZoneId().orElseThrow());
+                village.minerZoneId().orElseThrow(), village.lumberjackZoneId().orElseThrow(), initialMineMinimumY);
     }
 
     private static WorkerPair waitForNaturalWorkers(ClientGameTestContext context,
                                                      TestSingleplayerContext singleplayer,
                                                      NaturalVillage village) {
         WorkerPair latest = workerPair(singleplayer, village);
-        for (int attempt = 0; attempt < 25 && !latest.complete(); attempt++) {
+        MineProgress mineProgress = mineProgress(singleplayer, village);
+        for (int attempt = 0; attempt < 25 && !(latest.complete() && mineProgress.extended()); attempt++) {
             context.waitTicks(20);
             latest = workerPair(singleplayer, village);
+            mineProgress = mineProgress(singleplayer, village);
         }
-        require(latest.complete(), "Natural village workers did not complete real world work in " + village.id()
+        require(latest.complete() && mineProgress.extended(),
+                "Natural village workers did not complete real world work and extend the Mine in " + village.id()
                 + "; miner={" + latest.miner().facts() + "}; mine={"
-                + minerZoneFacts(singleplayer, village, latest.miner().id()) + "}; lumberjack={"
+                + minerZoneFacts(singleplayer, village, latest.miner().id())
+                + ",initialMinimumY=" + village.initialMineMinimumY()
+                + ",currentMinimumY=" + mineProgress.minimumY() + "}; lumberjack={"
                 + latest.lumberjack().facts() + "}");
         return latest;
+    }
+
+    private static MineProgress mineProgress(TestSingleplayerContext singleplayer, NaturalVillage village) {
+        return singleplayer.getServer().computeOnServer(server -> WorkerAssignmentSavedData.forServer(server)
+                .getZone(village.minerZoneId())
+                .map(record -> new MineProgress(record.zone().minimum().y(),
+                        record.zone().minimum().y() < village.initialMineMinimumY()))
+                .orElse(new MineProgress(Integer.MAX_VALUE, false)));
     }
 
     private static String minerZoneFacts(TestSingleplayerContext singleplayer, NaturalVillage village, UUID minerId) {
@@ -300,12 +318,15 @@ public final class MangroveVillageNaturalWorldClientGameTest implements FabricCl
     private record NaturalVillage(String id, BlockPos center,
                                   int minimumX, int minimumY, int minimumZ,
                                   int maximumX, int maximumY, int maximumZ,
-                                  UUID minerZoneId, UUID lumberjackZoneId) {
+                                  UUID minerZoneId, UUID lumberjackZoneId, int initialMineMinimumY) {
         private boolean contains(BlockPos position, int margin) {
             return position.getX() >= minimumX - margin && position.getX() <= maximumX + margin
                     && position.getY() >= minimumY - margin && position.getY() <= maximumY + margin
                     && position.getZ() >= minimumZ - margin && position.getZ() <= maximumZ + margin;
         }
+    }
+
+    private record MineProgress(int minimumY, boolean extended) {
     }
 
     private record WorkerPair(WorkerProbe miner, WorkerProbe lumberjack) {

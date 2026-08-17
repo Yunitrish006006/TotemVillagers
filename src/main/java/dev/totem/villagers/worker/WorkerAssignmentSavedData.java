@@ -60,6 +60,25 @@ public final class WorkerAssignmentSavedData extends SavedData {
         return Optional.ofNullable(zones.get(zoneId));
     }
 
+    /**
+     * Extends one persisted Miner shaft by exactly one block at its lower
+     * boundary while preserving its identity, owner, dimension and horizontal
+     * permission boundary.
+     */
+    public synchronized boolean extendMinerZoneDownward(UUID zoneId, int newMinimumY) {
+        WorkZoneRecord current = zones.get(zoneId);
+        if (current == null || !WorkerProfessionRegistry.MINER.id().equals(current.roleId())
+                || newMinimumY != current.zone().minimum().y() - 1) {
+            return false;
+        }
+        WorkZone zone = current.zone();
+        WorkZone extended = new WorkZone(zone.ownerId(), zone.dimensionId(),
+                new BlockCoordinate(zone.minimum().x(), newMinimumY, zone.minimum().z()), zone.maximum());
+        zones.put(zoneId, new WorkZoneRecord(current.id(), current.roleId(), extended));
+        setDirty();
+        return true;
+    }
+
     /** The zone owner must match the villager-assignment operator, preventing cross-owner zone borrowing. */
     public synchronized boolean assignZone(UUID actorId, WorkerAssignment assignment, UUID zoneId) {
         WorkZoneRecord zone = zones.get(zoneId);
