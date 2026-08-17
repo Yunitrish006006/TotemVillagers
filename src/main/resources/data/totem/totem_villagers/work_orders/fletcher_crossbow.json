@@ -1,0 +1,14 @@
+{
+  "id": "totem:fletcher_crossbow",
+  "profession": "minecraft:fletcher",
+  "output": { "item": "minecraft:crossbow", "count": 1 },
+  "required_inputs": [
+    { "item": "minecraft:stick", "count": 3 },
+    { "item": "minecraft:string", "count": 2 },
+    { "item": "minecraft:iron_ingot", "count": 1 },
+    { "item": "minecraft:tripwire_hook", "count": 1 }
+  ],
+  "sources": ["workshop"],
+  "work_ticks": 120,
+  "stock_cap": 8
+}

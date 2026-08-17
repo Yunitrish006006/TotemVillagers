@@ -1,0 +1,24 @@
+{
+  "parent": "deadrecall:villagers_root",
+  "criteria": {
+    "has_manual": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.deadrecall.villagers_manual.description"
+    },
+    "icon": {
+      "id": "minecraft:written_book"
+    },
+    "title": {
+      "translate": "advancements.deadrecall.villagers_manual.title"
+    }
+  },
+  "requirements": [
+    [
+      "has_manual"
+    ]
+  ]
+}

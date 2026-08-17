@@ -1,0 +1,1 @@
+{"id":"totem:fisherman_acacia_boat","profession":"minecraft:fisherman","output":{"item":"minecraft:acacia_boat","count":1},"required_inputs":[{"item":"minecraft:acacia_planks","count":5}],"sources":["workshop"],"work_ticks":80,"stock_cap":16}

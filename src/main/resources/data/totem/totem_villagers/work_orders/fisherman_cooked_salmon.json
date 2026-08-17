@@ -1,0 +1,10 @@
+{
+  "id": "totem:fisherman_cooked_salmon",
+  "profession": "minecraft:fisherman",
+  "output": { "item": "minecraft:cooked_salmon", "count": 1 },
+  "required_inputs": [{ "item": "minecraft:salmon", "count": 1 }],
+  "sources": ["workshop", "world"],
+  "world_target_tag": "totem:fishing_water",
+  "work_ticks": 100,
+  "stock_cap": 24
+}

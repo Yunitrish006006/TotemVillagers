@@ -1,0 +1,144 @@
+plugins {
+    id 'fabric-loom' version '1.17.12'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+
+def totemCoreJar = file(providers.gradleProperty('totemCoreJar')
+        .getOrElse('../TotemCore/build/libs/totem-core-0.6.0.jar'))
+def totemRemnantJar = file(providers.gradleProperty('totemRemnantJar')
+        .getOrElse('../TotemRemnant/build/libs/totem-remnant-0.2.11.jar'))
+
+loom {
+    splitEnvironmentSourceSets()
+    mods { 'totem-villagers' { sourceSet sourceSets.main } }
+    mods { 'totem-villagers' { sourceSet sourceSets.client } }
+}
+
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'totem-villagers-gametest'
+        enableGameTests = true
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.codemc.io/repository/relativitymc/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "org.relativitymc:modern-yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    compileOnly "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    runtimeOnly "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    // The aggregate Fabric API ships this module at runtime. Keep its types on
+    // the compiler classpath without asking Loom to remap its named class
+    // tweaker a second time.
+    compileOnly "net.fabricmc.fabric-api:fabric-menu-api-v1:2.0.16+086d547a9e"
+    modImplementation files(totemCoreJar)
+    // Optional production integration, present only in GameTests so the
+    // standalone Villagers artifact never gains a hard Remnant dependency.
+    gametestRuntimeOnly files(totemRemnantJar)
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach { useJUnitPlatform() }
+
+tasks.register('normalizeFabricApiTweakersForNamedDevRuntime') {
+    group = 'fabric'
+    description = 'Normalizes Fabric API tweaker namespaces for the named development runtime.'
+
+    doLast {
+        def jarFiles = new LinkedHashSet<File>()
+        jarFiles.addAll(configurations.runtimeClasspath.resolve().findAll { file ->
+            file.name.endsWith('.jar') && file.absolutePath.contains("${File.separator}net.fabricmc.fabric-api${File.separator}")
+        })
+
+        [gradle.gradleUserHomeDir, new File(System.getProperty('user.home'), '.gradle')].each { File cacheRoot ->
+            File fabricApiCache = new File(cacheRoot, 'caches/modules-2/files-2.1/net.fabricmc.fabric-api')
+            if (fabricApiCache.isDirectory()) {
+                jarFiles.addAll(fileTree(dir: fabricApiCache, include: '**/*.jar').files.findAll { file ->
+                    !file.name.endsWith('-sources.jar')
+                })
+            }
+        }
+
+        int patchedFiles = 0
+        int patchedEntries = 0
+        jarFiles.each { File jarFile ->
+            File tempFile = new File(buildDir, "tmp/tweaker-normalized/${jarFile.name}.tmp")
+            tempFile.parentFile.mkdirs()
+            boolean fileChanged = false
+            def zipFile = new java.util.zip.ZipFile(jarFile)
+            def zipOut = new java.util.zip.ZipOutputStream(new java.io.BufferedOutputStream(new java.io.FileOutputStream(tempFile)))
+            try {
+                def entries = zipFile.entries()
+                while (entries.hasMoreElements()) {
+                    def entry = entries.nextElement()
+                    zipOut.putNextEntry(new java.util.zip.ZipEntry(entry.name))
+                    byte[] bytes = entry.isDirectory() ? new byte[0] : zipFile.getInputStream(entry).bytes
+                    if (!entry.isDirectory() && (entry.name.endsWith('.classtweaker') || entry.name.endsWith('.accesswidener'))) {
+                        String text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
+                        String normalized = text
+                                .replaceFirst(/(?m)^(classTweaker\s+v\d+\s+)official(\s*)$/, '$1named$2')
+                                .replaceFirst(/(?m)^(accessWidener\s+v\d+\s+)official(\s*)$/, '$1named$2')
+                        if (normalized != text) {
+                            bytes = normalized.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                            fileChanged = true
+                            patchedEntries++
+                        }
+                    }
+                    zipOut.write(bytes)
+                    zipOut.closeEntry()
+                }
+            } finally {
+                zipOut.close()
+                zipFile.close()
+            }
+            if (fileChanged) {
+                java.nio.file.Files.move(tempFile.toPath(), jarFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                patchedFiles++
+            } else {
+                tempFile.delete()
+            }
+        }
+        logger.lifecycle("Normalized ${patchedEntries} Fabric API tweaker entries in ${patchedFiles} jars for named dev runtime.")
+    }
+}
+
+tasks.matching { task -> task.name in ['runServer', 'runClient', 'runGameTest', 'runClientGameTest'] }.configureEach {
+    dependsOn('normalizeFabricApiTweakersForNamedDevRuntime')
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+tasks.named('processResources', ProcessResources) {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand(version: project.version) }
+    doLast {
+        copy {
+            from(file('src/main/resources/assets/totem/lang/zh_tw.json'))
+            into(file("${destinationDir}/assets/totem/lang"))
+            rename { 'zh_cn.json' }
+        }
+    }
+}
+
+tasks.named('jar', Jar) {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    from('LICENSE.txt') { rename { "${it}_${project.archives_base_name}" } }
+}

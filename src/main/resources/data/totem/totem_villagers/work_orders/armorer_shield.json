@@ -1,0 +1,1 @@
+{"id":"totem:armorer_shield","profession":"minecraft:armorer","output":{"item":"minecraft:shield","count":1},"required_inputs":[{"item":"minecraft:oak_planks","count":6},{"item":"minecraft:iron_ingot","count":1}],"sources":["workshop"],"work_ticks":80,"stock_cap":16}

@@ -1,0 +1,10 @@
+{
+  "id": "totem:diamond_deepslate",
+  "dimension": "minecraft:overworld",
+  "substrate_tag": "minecraft:deepslate_ore_replaceables",
+  "ore_block": "minecraft:deepslate_diamond_ore",
+  "bands": [
+    {"shape": "triangle", "min_y": -64, "peak_y": -64, "max_y": 16, "chance_per_10000": 6},
+    {"shape": "uniform", "min_y": -64, "max_y": -4, "chance_per_10000": 2}
+  ]
+}

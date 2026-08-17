@@ -1,0 +1,1 @@
+{"id":"totem:cleric_glowstone","profession":"minecraft:cleric","output":{"item":"minecraft:glowstone","count":1},"required_inputs":[{"item":"minecraft:glowstone_dust","count":4}],"sources":["workshop"],"work_ticks":80,"stock_cap":12}

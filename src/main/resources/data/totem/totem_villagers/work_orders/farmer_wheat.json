@@ -1,0 +1,9 @@
+{
+  "id": "totem:farmer_wheat",
+  "profession": "minecraft:farmer",
+  "output": { "item": "minecraft:wheat", "count": 1 },
+  "sources": ["world"],
+  "world_target_tag": "totem:farmer_mature_wheat",
+  "work_ticks": 40,
+  "stock_cap": 64
+}

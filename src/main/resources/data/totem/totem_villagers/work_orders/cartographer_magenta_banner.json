@@ -1,0 +1,1 @@
+{"id":"totem:cartographer_magenta_banner","profession":"minecraft:cartographer","output":{"item":"minecraft:magenta_banner","count":1},"required_inputs":[{"item":"minecraft:magenta_wool","count":6},{"item":"minecraft:stick","count":1}],"sources":["workshop"],"work_ticks":80,"stock_cap":16}

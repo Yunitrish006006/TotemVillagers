@@ -1,0 +1,9 @@
+{
+  "id": "totem:shepherd_magenta_wool",
+  "profession": "minecraft:shepherd",
+  "output": { "item": "minecraft:magenta_wool", "count": 1 },
+  "sources": ["world"],
+  "world_target_entity_type": "minecraft:sheep",
+  "work_ticks": 20,
+  "stock_cap": 16
+}

@@ -1,0 +1,1 @@
+{"id":"totem:weaponsmith_iron_axe","profession":"minecraft:weaponsmith","output":{"item":"minecraft:iron_axe","count":1},"required_inputs":[{"item":"minecraft:iron_ingot","count":3},{"item":"minecraft:stick","count":2}],"sources":["workshop"],"work_ticks":80,"stock_cap":16}

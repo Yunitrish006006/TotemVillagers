@@ -1,0 +1,9 @@
+{
+  "id": "totem:copper_deepslate",
+  "dimension": "minecraft:overworld",
+  "substrate_tag": "minecraft:deepslate_ore_replaceables",
+  "ore_block": "minecraft:deepslate_copper_ore",
+  "bands": [
+    {"shape": "triangle", "min_y": -16, "peak_y": 48, "max_y": 112, "chance_per_10000": 190}
+  ]
+}

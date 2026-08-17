@@ -1,0 +1,13 @@
+{
+  "id": "totem:fletcher_arrows",
+  "profession": "minecraft:fletcher",
+  "output": { "item": "minecraft:arrow", "count": 4 },
+  "required_inputs": [
+    { "item": "minecraft:flint", "count": 1 },
+    { "item": "minecraft:stick", "count": 1 },
+    { "item": "minecraft:feather", "count": 1 }
+  ],
+  "sources": ["workshop"],
+  "work_ticks": 40,
+  "stock_cap": 64
+}

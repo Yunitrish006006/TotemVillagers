@@ -1,0 +1,1 @@
+{"id":"totem:toolsmith_copper_pickaxe","profession":"minecraft:toolsmith","output":{"item":"minecraft:copper_pickaxe","count":1},"required_inputs":[{"item":"minecraft:copper_ingot","count":3},{"item":"minecraft:stick","count":2}],"sources":["workshop"],"work_ticks":80,"stock_cap":16}

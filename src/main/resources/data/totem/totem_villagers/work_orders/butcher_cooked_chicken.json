@@ -1,0 +1,9 @@
+{
+  "id": "totem:butcher_cooked_chicken",
+  "profession": "minecraft:butcher",
+  "output": { "item": "minecraft:cooked_chicken", "count": 1 },
+  "required_inputs": [{ "item": "minecraft:chicken", "count": 1 }],
+  "sources": ["workshop"],
+  "work_ticks": 100,
+  "stock_cap": 24
+}

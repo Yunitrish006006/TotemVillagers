@@ -1,0 +1,14 @@
+{
+  "placement": {
+    "type": "minecraft:random_spread",
+    "salt": 179424673,
+    "separation": 4,
+    "spacing": 8
+  },
+  "structures": [
+    {
+      "structure": "totem:mangrove_village",
+      "weight": 1
+    }
+  ]
+}

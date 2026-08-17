@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "package": "dev.totem.villagers.mixin.client",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "AbstractContainerScreenTradeSnapshotMixin",
+    "LivingEntityRendererItemModelResolverAccessor",
+    "MerchantScreenTradeSnapshotMixin",
+    "VillagerModelWorkAnimationMixin",
+    "VillagerRenderStateWorkAnimationMixin",
+    "VillagerRendererWorkToolMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "totem:cartographer_empty_map",
+  "profession": "minecraft:cartographer",
+  "output": { "item": "minecraft:map", "count": 1 },
+  "required_inputs": [
+    { "item": "minecraft:paper", "count": 8 },
+    { "item": "minecraft:compass", "count": 1 }
+  ],
+  "sources": ["workshop"],
+  "work_ticks": 80,
+  "stock_cap": 24
+}

@@ -1,0 +1,9 @@
+{
+  "id": "totem:farmer_beetroot",
+  "profession": "minecraft:farmer",
+  "output": { "item": "minecraft:beetroot", "count": 1 },
+  "sources": ["world"],
+  "world_target_tag": "totem:farmer_mature_beetroots",
+  "work_ticks": 40,
+  "stock_cap": 64
+}

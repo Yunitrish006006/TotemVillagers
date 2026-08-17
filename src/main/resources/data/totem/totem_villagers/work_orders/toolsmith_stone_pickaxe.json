@@ -1,0 +1,1 @@
+{"id":"totem:toolsmith_stone_pickaxe","profession":"minecraft:toolsmith","output":{"item":"minecraft:stone_pickaxe","count":1},"required_inputs":[{"item":"minecraft:cobblestone","count":3},{"item":"minecraft:stick","count":2}],"sources":["workshop"],"work_ticks":80,"stock_cap":16}

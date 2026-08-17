@@ -1,0 +1,10 @@
+{
+  "id": "totem:gold_badlands_stone",
+  "dimension": "minecraft:overworld",
+  "substrate_tag": "minecraft:stone_ore_replaceables",
+  "biome_tag": "minecraft:is_badlands",
+  "ore_block": "minecraft:gold_ore",
+  "bands": [
+    {"shape": "uniform", "min_y": 32, "max_y": 256, "chance_per_10000": 160}
+  ]
+}

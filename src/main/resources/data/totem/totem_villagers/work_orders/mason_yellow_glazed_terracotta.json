@@ -1,0 +1,6 @@
+{
+  "id": "totem:mason_yellow_glazed_terracotta", "profession": "minecraft:mason",
+  "output": { "item": "minecraft:yellow_glazed_terracotta", "count": 1 },
+  "required_inputs": [{ "item": "minecraft:yellow_terracotta", "count": 1 }],
+  "sources": ["workshop"], "work_ticks": 100, "stock_cap": 32
+}

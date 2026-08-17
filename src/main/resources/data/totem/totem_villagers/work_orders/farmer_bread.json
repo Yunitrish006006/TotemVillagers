@@ -1,0 +1,11 @@
+{
+  "id": "totem:farmer_bread",
+  "profession": "minecraft:farmer",
+  "output": { "item": "minecraft:bread", "count": 1 },
+  "required_inputs": [
+    { "item": "minecraft:wheat", "count": 3 }
+  ],
+  "sources": ["workshop"],
+  "work_ticks": 40,
+  "stock_cap": 24
+}

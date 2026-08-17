@@ -1,0 +1,9 @@
+{
+  "id": "totem:mason_quartz_pillar",
+  "profession": "minecraft:mason",
+  "output": { "item": "minecraft:quartz_pillar", "count": 1 },
+  "required_inputs": [{ "item": "minecraft:quartz_block", "count": 1 }],
+  "sources": ["workshop"],
+  "work_ticks": 60,
+  "stock_cap": 24
+}

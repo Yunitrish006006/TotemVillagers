@@ -1,0 +1,12 @@
+{
+  "id": "totem:farmer_glistering_melon_slice",
+  "profession": "minecraft:farmer",
+  "output": { "item": "minecraft:glistering_melon_slice", "count": 1 },
+  "required_inputs": [
+    { "item": "minecraft:melon_slice", "count": 1 },
+    { "item": "minecraft:gold_nugget", "count": 8 }
+  ],
+  "sources": ["workshop"],
+  "work_ticks": 80,
+  "stock_cap": 24
+}

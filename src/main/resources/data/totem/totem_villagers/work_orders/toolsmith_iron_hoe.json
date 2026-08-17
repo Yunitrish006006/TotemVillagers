@@ -1,0 +1,1 @@
+{"id":"totem:toolsmith_iron_hoe","profession":"minecraft:toolsmith","output":{"item":"minecraft:iron_hoe","count":1},"required_inputs":[{"item":"minecraft:iron_ingot","count":2},{"item":"minecraft:stick","count":2}],"sources":["workshop"],"work_ticks":80,"stock_cap":16}

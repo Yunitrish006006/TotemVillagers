@@ -1,0 +1,10 @@
+{
+  "id": "totem:coal_stone",
+  "dimension": "minecraft:overworld",
+  "substrate_tag": "minecraft:stone_ore_replaceables",
+  "ore_block": "minecraft:coal_ore",
+  "bands": [
+    {"shape": "triangle", "min_y": 0, "peak_y": 96, "max_y": 192, "chance_per_10000": 360},
+    {"shape": "uniform", "min_y": 136, "max_y": 319, "chance_per_10000": 90}
+  ]
+}

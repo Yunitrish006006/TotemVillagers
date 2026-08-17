@@ -1,0 +1,12 @@
+{
+  "id": "totem:farmer_golden_carrot",
+  "profession": "minecraft:farmer",
+  "output": { "item": "minecraft:golden_carrot", "count": 1 },
+  "required_inputs": [
+    { "item": "minecraft:carrot", "count": 1 },
+    { "item": "minecraft:gold_nugget", "count": 8 }
+  ],
+  "sources": ["workshop"],
+  "work_ticks": 80,
+  "stock_cap": 24
+}

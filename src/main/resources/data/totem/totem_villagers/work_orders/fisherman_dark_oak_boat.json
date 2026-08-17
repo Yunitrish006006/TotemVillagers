@@ -1,0 +1,1 @@
+{"id":"totem:fisherman_dark_oak_boat","profession":"minecraft:fisherman","output":{"item":"minecraft:dark_oak_boat","count":1},"required_inputs":[{"item":"minecraft:dark_oak_planks","count":5}],"sources":["workshop"],"work_ticks":80,"stock_cap":16}

@@ -1,0 +1,1 @@
+{"id":"totem:shepherd_green_bed","profession":"minecraft:shepherd","output":{"item":"minecraft:green_bed","count":1},"required_inputs":[{"item":"minecraft:green_wool","count":3},{"item":"minecraft:oak_planks","count":3}],"sources":["workshop"],"work_ticks":80,"stock_cap":32}

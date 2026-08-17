@@ -1,0 +1,12 @@
+{
+  "id": "totem:toolsmith_fishing_rod",
+  "profession": "minecraft:toolsmith",
+  "output": { "item": "minecraft:fishing_rod", "count": 1 },
+  "required_inputs": [
+    { "item": "minecraft:stick", "count": 3 },
+    { "item": "minecraft:string", "count": 2 }
+  ],
+  "sources": ["workshop"],
+  "work_ticks": 80,
+  "stock_cap": 8
+}

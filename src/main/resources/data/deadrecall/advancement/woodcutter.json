@@ -1,0 +1,27 @@
+{
+  "parent": "deadrecall:villagers_manual",
+  "criteria": {
+    "crafted_woodcutter": {
+      "conditions": {
+        "recipe_id": "totem:woodcutter"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.deadrecall.villagers_woodcutter.description"
+    },
+    "icon": {
+      "id": "totem:woodcutter"
+    },
+    "title": {
+      "translate": "advancements.deadrecall.villagers_woodcutter.title"
+    }
+  },
+  "requirements": [
+    [
+      "crafted_woodcutter"
+    ]
+  ]
+}

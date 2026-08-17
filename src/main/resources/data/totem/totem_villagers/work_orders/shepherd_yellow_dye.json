@@ -1,0 +1,1 @@
+{"id":"totem:shepherd_yellow_dye","profession":"minecraft:shepherd","output":{"item":"minecraft:yellow_dye","count":1},"required_inputs":[{"item":"minecraft:dandelion","count":1}],"sources":["workshop"],"work_ticks":40,"stock_cap":64}

@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "#": "#minecraft:planks",
+    "I": "minecraft:iron_ingot"
+  },
+  "pattern": [
+    "#I#",
+    "###"
+  ],
+  "result": {
+    "id": "totem:woodcutter",
+    "count": 1
+  }
+}

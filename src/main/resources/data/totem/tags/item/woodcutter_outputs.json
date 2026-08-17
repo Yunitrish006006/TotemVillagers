@@ -1,0 +1,24 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:planks",
+    "#minecraft:wooden_buttons",
+    "#minecraft:wooden_doors",
+    "#minecraft:wooden_stairs",
+    "#minecraft:wooden_slabs",
+    "#minecraft:wooden_fences",
+    "#minecraft:fence_gates",
+    "#minecraft:wooden_pressure_plates",
+    "#minecraft:wooden_shelves",
+    "#minecraft:wooden_trapdoors",
+    "#minecraft:signs",
+    "#minecraft:hanging_signs",
+    "#minecraft:boats",
+    "#minecraft:chest_boats",
+    "minecraft:stick",
+    "minecraft:bowl",
+    "minecraft:chest",
+    "minecraft:crafting_table",
+    "minecraft:ladder"
+  ]
+}

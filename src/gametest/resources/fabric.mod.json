@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "id": "totem-villagers-gametest",
+  "version": "1.0.0",
+  "name": "Totem Villagers GameTests",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-gametest": [
+      "dev.totem.villagers.gametest.ComponentAwareStockGameTest",
+      "dev.totem.villagers.gametest.WorkshopRecipeGameTest",
+      "dev.totem.villagers.gametest.VanillaSellOfferGateGameTest",
+      "dev.totem.villagers.gametest.CompletedProfessionCoverageGameTest",
+      "dev.totem.villagers.gametest.PlayerRecipeAuthorityGameTest",
+      "dev.totem.villagers.gametest.LeatherworkerDyedArmorGameTest",
+      "dev.totem.villagers.gametest.FletcherTippedArrowGameTest",
+      "dev.totem.villagers.gametest.FarmerSuspiciousStewGameTest",
+      "dev.totem.villagers.gametest.BuilderBlueprintGameTest",
+      "dev.totem.villagers.gametest.VillagerFoodEconomyGameTest",
+      "dev.totem.villagers.gametest.FarmerWorldWorkGameTest",
+      "dev.totem.villagers.gametest.FarmerGatheredCropTradesGameTest",
+      "dev.totem.villagers.gametest.PlayableFarmerCycleGameTest",
+      "dev.totem.villagers.gametest.WorldMaterialDeliveryGameTest",
+      "dev.totem.villagers.gametest.MinimumVillageProductionGameTest",
+      "dev.totem.villagers.gametest.VillageLongevityGameTest",
+      "dev.totem.villagers.gametest.FishermanVillageLongevityGameTest",
+      "dev.totem.villagers.gametest.TradeSnapshotInventoryGameTest",
+      "dev.totem.villagers.gametest.TradeStockAuthorityGameTest",
+      "dev.totem.villagers.gametest.PersonalInventoryWorkshopGameTest",
+      "dev.totem.villagers.gametest.VillagerMaterialLogisticsGameTest",
+      "dev.totem.villagers.gametest.VillagerResourceWorkforceGameTest",
+      "dev.totem.villagers.gametest.VillageWorldgenBootstrapGameTest",
+      "dev.totem.villagers.gametest.WoodcutterGameTest",
+      "dev.totem.villagers.gametest.LumberjackWoodcutterRuntimeGameTest",
+      "dev.totem.villagers.gametest.GuardConstructionGameTest",
+      "dev.totem.villagers.gametest.LibrarianEnchantingGameTest",
+      "dev.totem.villagers.gametest.ToolsmithBucketGameTest",
+      "dev.totem.villagers.gametest.ToolsmithVillageEconomyGameTest",
+      "dev.totem.villagers.gametest.ToolsmithBackpackGameTest",
+      "dev.totem.villagers.gametest.SpecialistMaterialTradesGameTest",
+      "dev.totem.villagers.gametest.SpecialistMerchantInteractionGameTest",
+      "dev.totem.villagers.gametest.PlayerPurchaseWorkInventoryGameTest",
+      "dev.totem.villagers.gametest.WorldEnablementGameTest"
+    ],
+    "fabric-client-gametest": [
+      "dev.totem.villagers.client.TradeSnapshotClientGameTest",
+      "dev.totem.villagers.client.VillagerTradeCatalogClientGameTest",
+      "dev.totem.villagers.client.MinerHelmetClientGameTest",
+      "dev.totem.villagers.client.LumberjackSkinClientGameTest",
+      "dev.totem.villagers.client.VillagerItemUseClientGameTest",
+      "dev.totem.villagers.client.MineShaftClientGameTest",
+      "dev.totem.villagers.client.MangroveVillageClientGameTest",
+      "dev.totem.villagers.client.MangroveVillageNaturalWorldClientGameTest"
+    ]
+  },
+  "depends": {
+    "fabricloader": "*",
+    "fabric-api": "*",
+    "minecraft": "*",
+    "totem-villagers": "*"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "totem:iron_deepslate",
+  "dimension": "minecraft:overworld",
+  "substrate_tag": "minecraft:deepslate_ore_replaceables",
+  "ore_block": "minecraft:deepslate_iron_ore",
+  "bands": [
+    {"shape": "triangle", "min_y": 80, "peak_y": 232, "max_y": 384, "chance_per_10000": 220},
+    {"shape": "triangle", "min_y": -24, "peak_y": 16, "max_y": 56, "chance_per_10000": 260},
+    {"shape": "uniform", "min_y": -64, "max_y": 72, "chance_per_10000": 120},
+    {"shape": "uniform", "min_y": 32, "max_y": 72, "chance_per_10000": 50}
+  ]
+}

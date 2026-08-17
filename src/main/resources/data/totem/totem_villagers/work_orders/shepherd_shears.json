@@ -1,0 +1,1 @@
+{"id":"totem:shepherd_shears","profession":"minecraft:shepherd","output":{"item":"minecraft:shears","count":1},"required_inputs":[{"item":"minecraft:iron_ingot","count":2}],"sources":["workshop"],"work_ticks":60,"stock_cap":16}

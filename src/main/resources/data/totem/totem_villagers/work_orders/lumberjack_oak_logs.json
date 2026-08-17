@@ -1,0 +1,10 @@
+{
+  "id": "totem:lumberjack_oak_logs",
+  "profession": "totem:lumberjack",
+  "output": { "item": "minecraft:oak_log", "count": 4 },
+  "sources": ["world"],
+  "world_target_tag": "totem:lumberjack_oak_logs",
+  "world_replant_block": "minecraft:oak_sapling",
+  "work_ticks": 40,
+  "stock_cap": 64
+}

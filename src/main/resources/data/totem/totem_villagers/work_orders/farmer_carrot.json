@@ -1,0 +1,9 @@
+{
+  "id": "totem:farmer_carrot",
+  "profession": "minecraft:farmer",
+  "output": { "item": "minecraft:carrot", "count": 1 },
+  "sources": ["world"],
+  "world_target_tag": "totem:farmer_mature_carrots",
+  "work_ticks": 40,
+  "stock_cap": 64
+}

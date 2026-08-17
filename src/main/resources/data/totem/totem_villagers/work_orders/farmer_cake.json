@@ -1,0 +1,14 @@
+{
+  "id": "totem:farmer_cake",
+  "profession": "minecraft:farmer",
+  "output": { "item": "minecraft:cake", "count": 1 },
+  "required_inputs": [
+    { "item": "minecraft:milk_bucket", "count": 3 },
+    { "item": "minecraft:sugar", "count": 2 },
+    { "item": "minecraft:egg", "count": 1 },
+    { "item": "minecraft:wheat", "count": 3 }
+  ],
+  "sources": ["workshop"],
+  "work_ticks": 100,
+  "stock_cap": 12
+}

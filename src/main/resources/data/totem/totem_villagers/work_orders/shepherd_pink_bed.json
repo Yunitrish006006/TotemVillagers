@@ -1,0 +1,1 @@
+{"id":"totem:shepherd_pink_bed","profession":"minecraft:shepherd","output":{"item":"minecraft:pink_bed","count":1},"required_inputs":[{"item":"minecraft:pink_wool","count":3},{"item":"minecraft:oak_planks","count":3}],"sources":["workshop"],"work_ticks":80,"stock_cap":32}

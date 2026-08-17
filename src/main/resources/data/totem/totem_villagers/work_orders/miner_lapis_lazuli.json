@@ -1,0 +1,9 @@
+{
+  "id": "totem:miner_lapis_lazuli",
+  "profession": "totem:miner",
+  "output": { "item": "minecraft:lapis_lazuli", "count": 4 },
+  "sources": ["world"],
+  "world_target_tag": "totem:miner_lapis_ores",
+  "work_ticks": 30,
+  "stock_cap": 64
+}

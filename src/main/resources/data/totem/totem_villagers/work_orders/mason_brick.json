@@ -1,0 +1,9 @@
+{
+  "id": "totem:mason_brick",
+  "profession": "minecraft:mason",
+  "output": { "item": "minecraft:brick", "count": 1 },
+  "required_inputs": [{ "item": "minecraft:clay_ball", "count": 1 }],
+  "sources": ["workshop"],
+  "work_ticks": 100,
+  "stock_cap": 64
+}

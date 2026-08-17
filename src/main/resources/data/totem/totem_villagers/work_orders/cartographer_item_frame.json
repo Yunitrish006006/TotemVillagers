@@ -1,0 +1,1 @@
+{"id":"totem:cartographer_item_frame","profession":"minecraft:cartographer","output":{"item":"minecraft:item_frame","count":1},"required_inputs":[{"item":"minecraft:stick","count":8},{"item":"minecraft:leather","count":1}],"sources":["workshop"],"work_ticks":80,"stock_cap":16}

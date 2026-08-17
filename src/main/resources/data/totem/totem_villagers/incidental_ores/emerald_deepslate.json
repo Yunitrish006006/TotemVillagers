@@ -1,0 +1,10 @@
+{
+  "id": "totem:emerald_deepslate",
+  "dimension": "minecraft:overworld",
+  "substrate_tag": "minecraft:deepslate_ore_replaceables",
+  "biome_tag": "minecraft:is_mountain",
+  "ore_block": "minecraft:deepslate_emerald_ore",
+  "bands": [
+    {"shape": "triangle", "min_y": -16, "peak_y": 232, "max_y": 480, "chance_per_10000": 40}
+  ]
+}

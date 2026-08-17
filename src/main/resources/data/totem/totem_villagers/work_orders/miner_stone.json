@@ -1,0 +1,9 @@
+{
+  "id": "totem:miner_stone",
+  "profession": "totem:miner",
+  "output": { "item": "minecraft:cobblestone", "count": 1 },
+  "sources": ["world"],
+  "world_target_tag": "totem:miner_targets",
+  "work_ticks": 20,
+  "stock_cap": 64
+}

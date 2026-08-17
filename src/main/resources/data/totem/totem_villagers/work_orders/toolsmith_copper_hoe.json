@@ -1,0 +1,1 @@
+{"id":"totem:toolsmith_copper_hoe","profession":"minecraft:toolsmith","output":{"item":"minecraft:copper_hoe","count":1},"required_inputs":[{"item":"minecraft:copper_ingot","count":2},{"item":"minecraft:stick","count":2}],"sources":["workshop"],"work_ticks":70,"stock_cap":16}

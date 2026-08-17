@@ -1,0 +1,1 @@
+{"id":"totem:librarian_compass","profession":"minecraft:librarian","output":{"item":"minecraft:compass","count":1},"required_inputs":[{"item":"minecraft:iron_ingot","count":4},{"item":"minecraft:redstone","count":1}],"sources":["workshop"],"work_ticks":100,"stock_cap":12}

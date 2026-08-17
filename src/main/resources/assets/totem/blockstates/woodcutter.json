@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "totem:block/woodcutter" },
+    "facing=east": { "model": "totem:block/woodcutter", "y": 90 },
+    "facing=south": { "model": "totem:block/woodcutter", "y": 180 },
+    "facing=west": { "model": "totem:block/woodcutter", "y": 270 }
+  }
+}

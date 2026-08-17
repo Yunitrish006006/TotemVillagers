@@ -1,0 +1,9 @@
+{
+  "id": "totem:mason_dripstone_block",
+  "profession": "minecraft:mason",
+  "output": { "item": "minecraft:dripstone_block", "count": 1 },
+  "required_inputs": [{ "item": "minecraft:pointed_dripstone", "count": 4 }],
+  "sources": ["workshop"],
+  "work_ticks": 80,
+  "stock_cap": 32
+}

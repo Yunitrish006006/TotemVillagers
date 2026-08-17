@@ -1,0 +1,1 @@
+{"id":"totem:shepherd_light_blue_carpet","profession":"minecraft:shepherd","output":{"item":"minecraft:light_blue_carpet","count":3},"required_inputs":[{"item":"minecraft:light_blue_wool","count":2}],"sources":["workshop"],"work_ticks":40,"stock_cap":64}

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "#totem:plant_fibers",
+    "#totem:plant_fibers",
+    "#totem:plant_fibers"
+  ],
+  "result": {
+    "id": "minecraft:string"
+  }
+}

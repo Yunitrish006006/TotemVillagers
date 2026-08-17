@@ -1,0 +1,1 @@
+{"id":"totem:toolsmith_stone_shovel","profession":"minecraft:toolsmith","output":{"item":"minecraft:stone_shovel","count":1},"required_inputs":[{"item":"minecraft:cobblestone","count":1},{"item":"minecraft:stick","count":2}],"sources":["workshop"],"work_ticks":60,"stock_cap":16}

@@ -1,0 +1,1 @@
+{"id":"totem:shepherd_light_gray_bed","profession":"minecraft:shepherd","output":{"item":"minecraft:light_gray_bed","count":1},"required_inputs":[{"item":"minecraft:light_gray_wool","count":3},{"item":"minecraft:oak_planks","count":3}],"sources":["workshop"],"work_ticks":80,"stock_cap":32}

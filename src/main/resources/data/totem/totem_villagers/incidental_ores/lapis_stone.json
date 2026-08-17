@@ -1,0 +1,10 @@
+{
+  "id": "totem:lapis_stone",
+  "dimension": "minecraft:overworld",
+  "substrate_tag": "minecraft:stone_ore_replaceables",
+  "ore_block": "minecraft:lapis_ore",
+  "bands": [
+    {"shape": "triangle", "min_y": -32, "peak_y": 0, "max_y": 32, "chance_per_10000": 45},
+    {"shape": "uniform", "min_y": -64, "max_y": 64, "chance_per_10000": 35}
+  ]
+}

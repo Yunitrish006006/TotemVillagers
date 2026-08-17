@@ -1,0 +1,10 @@
+{
+  "id": "totem:fisherman_cod_bucket",
+  "profession": "minecraft:fisherman",
+  "output": { "item": "minecraft:cod_bucket", "count": 1 },
+  "required_inputs": [{ "item": "minecraft:bucket", "count": 1 }],
+  "sources": ["world"],
+  "world_target_tag": "totem:fishing_water",
+  "work_ticks": 100,
+  "stock_cap": 4
+}

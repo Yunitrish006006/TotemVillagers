@@ -1,0 +1,1 @@
+{"id":"totem:shepherd_gray_carpet","profession":"minecraft:shepherd","output":{"item":"minecraft:gray_carpet","count":3},"required_inputs":[{"item":"minecraft:gray_wool","count":2}],"sources":["workshop"],"work_ticks":40,"stock_cap":64}

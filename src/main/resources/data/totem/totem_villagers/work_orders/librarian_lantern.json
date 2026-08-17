@@ -1,0 +1,1 @@
+{"id":"totem:librarian_lantern","profession":"minecraft:librarian","output":{"item":"minecraft:lantern","count":1},"required_inputs":[{"item":"minecraft:iron_nugget","count":8},{"item":"minecraft:torch","count":1}],"sources":["workshop"],"work_ticks":80,"stock_cap":12}

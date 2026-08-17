@@ -1,0 +1,15 @@
+{
+  "id": "totem:lumberjack_mangrove_logs",
+  "profession": "totem:lumberjack",
+  "output": {
+    "item": "minecraft:mangrove_log",
+    "count": 4
+  },
+  "sources": [
+    "world"
+  ],
+  "world_target_tag": "totem:lumberjack_mangrove_logs",
+  "world_replant_block": "minecraft:mangrove_propagule",
+  "work_ticks": 40,
+  "stock_cap": 64
+}

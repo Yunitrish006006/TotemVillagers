@@ -1,0 +1,1 @@
+{"id":"totem:toolsmith_bucket","profession":"minecraft:toolsmith","output":{"item":"minecraft:bucket","count":1},"required_inputs":[{"item":"minecraft:iron_ingot","count":3}],"sources":["workshop"],"work_ticks":60,"stock_cap":16}

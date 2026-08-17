@@ -1,0 +1,10 @@
+{
+  "id": "totem:lapis_deepslate",
+  "dimension": "minecraft:overworld",
+  "substrate_tag": "minecraft:deepslate_ore_replaceables",
+  "ore_block": "minecraft:deepslate_lapis_ore",
+  "bands": [
+    {"shape": "triangle", "min_y": -32, "peak_y": 0, "max_y": 32, "chance_per_10000": 45},
+    {"shape": "uniform", "min_y": -64, "max_y": 64, "chance_per_10000": 35}
+  ]
+}

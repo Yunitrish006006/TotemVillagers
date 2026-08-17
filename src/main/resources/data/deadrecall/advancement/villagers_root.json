@@ -1,0 +1,27 @@
+{
+  "parent": "deadrecall:root",
+  "criteria": {
+    "crafted_composter": {
+      "conditions": {
+        "recipe_id": "minecraft:composter"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.deadrecall.villagers_root.description"
+    },
+    "icon": {
+      "id": "minecraft:composter"
+    },
+    "title": {
+      "translate": "advancements.deadrecall.villagers_root.title"
+    }
+  },
+  "requirements": [
+    [
+      "crafted_composter"
+    ]
+  ]
+}
