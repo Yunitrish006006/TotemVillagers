@@ -8,6 +8,7 @@ import dev.totem.villagers.mixin.AbstractVillagerOffersAccessor;
 import dev.totem.villagers.trade.GatheredMaterialTrades;
 import dev.totem.villagers.trade.LumberjackAppleTrades;
 import dev.totem.villagers.trade.MinerLapisTrades;
+import dev.totem.villagers.trade.VillagerOfferSides;
 import dev.totem.villagers.trade.VillagerTradeStockAuthority;
 import dev.totem.villagers.work.VillagerWorkSavedData;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -20,6 +21,7 @@ import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.trading.ItemCost;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
 
@@ -35,15 +37,24 @@ public final class SpecialistMaterialTradesGameTest {
             settings.setMode(WorkBackedTradingMode.ENFORCED);
             MerchantOffers minerOffers = offers(miner);
             MerchantOffers lumberjackOffers = offers(lumberjack);
+            MerchantOffer emeraldLoop = new MerchantOffer(new ItemCost(Items.EMERALD, 2),
+                    new ItemStack(Items.EMERALD, 8), 16, 1, 0.05F);
+            lumberjackOffers.add(emeraldLoop);
             VillagerTradeStockAuthority.refreshOffers(miner, minerOffers);
             VillagerTradeStockAuthority.refreshOffers(lumberjack, lumberjackOffers);
             MerchantOffer lapis = minerOffers.stream().filter(MinerLapisTrades::isManagedOffer).findFirst().orElse(null);
             MerchantOffer apples = lumberjackOffers.stream().filter(LumberjackAppleTrades::isManagedOffer).findFirst().orElse(null);
             require(helper, lapis == null && apples == null,
                     "Complete mode displayed specialist merchandise before physical work supplied it");
+            require(helper, emeraldLoop.isOutOfStock() && !lumberjackOffers.contains(emeraldLoop),
+                    "Emerald-for-emerald self exchange survived the server trade gate");
 
             VillagerWorkInventory minerInventory = VillagerWorkInventorySavedData.forServer(server).inventory(miner.getUUID());
             VillagerWorkInventory lumberjackInventory = VillagerWorkInventorySavedData.forServer(server).inventory(lumberjack.getUUID());
+            require(helper, minerInventory.insertExact(new ItemStack(Items.EMERALD, 8)),
+                    "Could not seed Miner operating currency");
+            require(helper, lumberjackInventory.insertExact(new ItemStack(Items.EMERALD, 8)),
+                    "Could not seed Lumberjack operating currency");
             require(helper, minerInventory.insertExact(MinerLapisTrades.result()), "Could not seed Miner lapis material");
             require(helper, lumberjackInventory.insertExact(LumberjackAppleTrades.result()), "Could not seed Lumberjack apple material");
             require(helper, lumberjackInventory.insertExact(new ItemStack(Items.BREAD, 6)),
@@ -52,10 +63,16 @@ public final class SpecialistMaterialTradesGameTest {
                     "Could not seed Miner cobblestone material");
             require(helper, minerInventory.insertExact(new ItemStack(Items.DIAMOND)),
                     "Could not seed Miner diamond material");
+            require(helper, minerInventory.insertExact(new ItemStack(Items.IRON_INGOT, 3)),
+                    "Could not seed Miner iron-ingot material");
+            require(helper, minerInventory.insertExact(new ItemStack(Items.GOLD_INGOT, 2)),
+                    "Could not seed Miner gold-ingot material");
             require(helper, minerInventory.insertExact(new ItemStack(Items.DRIPSTONE_BLOCK, 20)),
                     "Could not seed Miner fallback stone material");
-            require(helper, lumberjackInventory.insertExact(new ItemStack(Items.OAK_LOG, 8)),
+            require(helper, lumberjackInventory.insertExact(new ItemStack(Items.OAK_LOG)),
                     "Could not seed Lumberjack oak-log material");
+            require(helper, lumberjackInventory.insertExact(new ItemStack(Items.STICK, 16)),
+                    "Could not seed Lumberjack stick material");
             VillagerTradeStockAuthority.refreshOffers(miner, minerOffers);
             VillagerTradeStockAuthority.refreshOffers(lumberjack, lumberjackOffers);
             lapis = minerOffers.stream().filter(MinerLapisTrades::isManagedOffer).findFirst().orElse(null);
@@ -68,15 +85,35 @@ public final class SpecialistMaterialTradesGameTest {
                     .filter(offer -> offer.getResult().is(Items.DIAMOND)).findFirst().orElse(null);
             MerchantOffer oakLog = lumberjackOffers.stream().filter(GatheredMaterialTrades::isLumberjackManagedOffer)
                     .filter(offer -> offer.getResult().is(Items.OAK_LOG)).findFirst().orElse(null);
+            MerchantOffer sticks = lumberjackOffers.stream().filter(GatheredMaterialTrades::isLumberjackManagedOffer)
+                    .filter(offer -> offer.getResult().is(Items.STICK)).findFirst().orElse(null);
+            MerchantOffer iron = minerOffers.stream().filter(GatheredMaterialTrades::isMinerManagedOffer)
+                    .filter(offer -> offer.getResult().is(Items.IRON_INGOT)).findFirst().orElse(null);
+            MerchantOffer gold = minerOffers.stream().filter(GatheredMaterialTrades::isMinerManagedOffer)
+                    .filter(offer -> offer.getResult().is(Items.GOLD_INGOT)).findFirst().orElse(null);
             require(helper, cobblestone != null && cobblestone.getResult().getCount() == 16
                             && cobblestone.getBaseCostA().getCount() == 1,
                     "Miner did not publish the balanced 16-cobblestone-for-one-emerald row");
             require(helper, diamond != null && diamond.getResult().getCount() == 1
                             && diamond.getBaseCostA().getCount() == 6,
                     "Miner did not publish the balanced one-diamond-for-six-emerald row");
-            require(helper, oakLog != null && oakLog.getResult().getCount() == 8
+            require(helper, iron != null && iron.getResult().getCount() == 3
+                            && iron.getBaseCostA().getCount() == 1,
+                    "Miner iron sale did not retain a margin below the four-ingot vanilla purchase batch");
+            require(helper, gold != null && gold.getResult().getCount() == 2
+                            && gold.getBaseCostA().getCount() == 1,
+                    "Miner gold sale did not retain a margin below the three-ingot Cleric purchase batch");
+            require(helper, oakLog != null && oakLog.getResult().getCount() == 1
                             && oakLog.getBaseCostA().getCount() == 1,
-                    "Lumberjack did not publish the balanced eight-oak-logs-for-one-emerald row");
+                    "Lumberjack log price still permits profitable boat conversion");
+            require(helper, sticks != null && sticks.getResult().getCount() == 16
+                            && sticks.getBaseCostA().getCount() == 1,
+                    "Lumberjack stick sale did not retain a margin below the Fletcher purchase batch");
+            require(helper, minerOffers.stream().noneMatch(VillagerOfferSides::isEmeraldSelfExchange)
+                            && lumberjackOffers.stream().noneMatch(VillagerOfferSides::isEmeraldSelfExchange),
+                    "Operating currency became specialist merchandise");
+            require(helper, lumberjackOffers.stream().noneMatch(offer -> offer.getResult().is(Items.BREAD)),
+                    "Survival food became fallback gathered merchandise");
             MerchantOffer fallback = minerOffers.stream().filter(GatheredMaterialTrades::isMinerManagedOffer)
                     .filter(offer -> offer.getResult().is(Items.DRIPSTONE_BLOCK)).findFirst().orElse(null);
             require(helper, fallback != null && fallback.getBaseCostA().getCount() == 1 && fallback.getResult().getCount() == 16,
@@ -85,12 +122,20 @@ public final class SpecialistMaterialTradesGameTest {
             VillagerTradeStockAuthority.debitAfterSuccessfulTrade(miner, lapis);
             VillagerTradeStockAuthority.debitAfterSuccessfulTrade(lumberjack, apples);
             VillagerTradeStockAuthority.debitAfterSuccessfulTrade(miner, diamond);
+            VillagerTradeStockAuthority.debitAfterSuccessfulTrade(miner, iron);
+            VillagerTradeStockAuthority.debitAfterSuccessfulTrade(miner, gold);
             VillagerTradeStockAuthority.debitAfterSuccessfulTrade(lumberjack, oakLog);
+            VillagerTradeStockAuthority.debitAfterSuccessfulTrade(lumberjack, sticks);
             VillagerTradeStockAuthority.debitAfterSuccessfulTrade(miner, fallback);
             require(helper, minerInventory.countMatchingItem(MinerLapisTrades.result()) == 0
                             && lumberjackInventory.countMatchingItem(LumberjackAppleTrades.result()) == 0
-                            && count(minerInventory, Items.DIAMOND) == 0 && count(lumberjackInventory, Items.OAK_LOG) == 0
-                            && count(minerInventory, Items.DRIPSTONE_BLOCK) == 4,
+                            && count(minerInventory, Items.DIAMOND) == 0 && count(minerInventory, Items.IRON_INGOT) == 0
+                            && count(minerInventory, Items.GOLD_INGOT) == 0 && count(lumberjackInventory, Items.OAK_LOG) == 0
+                            && count(lumberjackInventory, Items.STICK) == 0
+                            && count(minerInventory, Items.DRIPSTONE_BLOCK) == 4
+                            && count(minerInventory, Items.EMERALD) == 8
+                            && count(lumberjackInventory, Items.EMERALD) == 8
+                            && count(lumberjackInventory, Items.BREAD) == 6,
                     "A specialist sale did not debit exactly its physical material batch");
             require(helper, lapis.isOutOfStock() && apples.isOutOfStock() && fallback.isOutOfStock(),
                     "A depleted specialist material row remained available");

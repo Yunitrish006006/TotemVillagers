@@ -37,11 +37,11 @@ public final class GatheredMaterialTrades {
             sale(Items.COBBLESTONE, 16, 1), sale(Items.COBBLED_DEEPSLATE, 16, 1),
             sale(Items.STONE, 16, 1), sale(Items.DEEPSLATE, 16, 1),
             sale(Items.COAL, 8, 1), sale(Items.RAW_COPPER, 8, 1),
-            sale(Items.RAW_IRON, 4, 1), sale(Items.IRON_INGOT, 4, 1), sale(Items.COPPER_INGOT, 8, 1),
-            sale(Items.GOLD_INGOT, 3, 1), sale(Items.QUARTZ, 4, 1),
+            sale(Items.RAW_IRON, 4, 1), sale(Items.IRON_INGOT, 3, 1), sale(Items.COPPER_INGOT, 8, 1),
+            sale(Items.GOLD_INGOT, 2, 1), sale(Items.QUARTZ, 4, 1),
             sale(Items.RAW_GOLD, 3, 1), sale(Items.REDSTONE, 3, 1), sale(Items.LAPIS_LAZULI, 3, 1),
             sale(Items.GOLD_NUGGET, 16, 1),
-            sale(Items.DIAMOND, 1, 6), sale(Items.EMERALD, 1, 6), sale(Items.ANCIENT_DEBRIS, 1, 12),
+            sale(Items.DIAMOND, 1, 6), sale(Items.ANCIENT_DEBRIS, 1, 12),
             sale(Items.COAL_ORE, 1, 2), sale(Items.DEEPSLATE_COAL_ORE, 1, 2),
             sale(Items.COPPER_ORE, 1, 3), sale(Items.DEEPSLATE_COPPER_ORE, 1, 3),
             sale(Items.IRON_ORE, 1, 3), sale(Items.DEEPSLATE_IRON_ORE, 1, 3),
@@ -55,10 +55,10 @@ public final class GatheredMaterialTrades {
 
     /* All native log and sapling variants keep data-pack-extended forest work useful without free stock. */
     private static final List<MaterialSale> LUMBERJACK_SALES = List.of(
-            sale(Items.OAK_LOG, 8, 1), sale(Items.SPRUCE_LOG, 8, 1), sale(Items.BIRCH_LOG, 8, 1),
-            sale(Items.JUNGLE_LOG, 8, 1), sale(Items.ACACIA_LOG, 8, 1), sale(Items.DARK_OAK_LOG, 8, 1),
-            sale(Items.MANGROVE_LOG, 8, 1), sale(Items.CHERRY_LOG, 8, 1), sale(Items.PALE_OAK_LOG, 8, 1),
-            sale(Items.CRIMSON_STEM, 8, 1), sale(Items.WARPED_STEM, 8, 1), sale(Items.STICK, 32, 1),
+            sale(Items.OAK_LOG, 1, 1), sale(Items.SPRUCE_LOG, 1, 1), sale(Items.BIRCH_LOG, 1, 1),
+            sale(Items.JUNGLE_LOG, 1, 1), sale(Items.ACACIA_LOG, 1, 1), sale(Items.DARK_OAK_LOG, 1, 1),
+            sale(Items.MANGROVE_LOG, 1, 1), sale(Items.CHERRY_LOG, 1, 1), sale(Items.PALE_OAK_LOG, 1, 1),
+            sale(Items.CRIMSON_STEM, 1, 1), sale(Items.WARPED_STEM, 1, 1), sale(Items.STICK, 16, 1),
             sale(Items.APPLE, 4, 1),
             sale(Items.OAK_SAPLING, 8, 1), sale(Items.SPRUCE_SAPLING, 8, 1), sale(Items.BIRCH_SAPLING, 8, 1),
             sale(Items.JUNGLE_SAPLING, 8, 1), sale(Items.ACACIA_SAPLING, 8, 1), sale(Items.DARK_OAK_SAPLING, 8, 1),
@@ -113,25 +113,25 @@ public final class GatheredMaterialTrades {
     private static void sync(MerchantOffers offers, VillagerWorkInventory inventory,
                              List<MaterialSale> configuredSales, Set<Item> reservedTools) {
         offers.removeIf(offer -> {
-            boolean depleted = isDynamicOffer(offer)
-                    && saleableCount(inventory, offer.getResult(), reservedTools) < offer.getResult().getCount();
-            if (depleted) {
+            if (!isDynamicOffer(offer)) {
+                return false;
+            }
+            MaterialSale current = saleFor(offer.getResult(), inventory, configuredSales, reservedTools);
+            boolean invalid = current.count() <= 0 || !current.matches(offer);
+            if (invalid) {
                 // Menus can retain this offer instance until their next sync.
-                // Mark it unavailable before removing it so a just-depleted
-                // material batch can never be used through that stale view.
+                // Mark it unavailable before removing it so a depleted or
+                // repriced material batch can never be used through that stale view.
                 offer.setToOutOfStock();
             }
-            return depleted;
+            return invalid;
         });
 
         for (ItemStack stack : inventory.snapshot()) {
             if (stack.isEmpty() || reservedTools.contains(stack.getItem())) {
                 continue;
             }
-            Optional<MaterialSale> configured = configuredSales.stream().filter(sale -> sale.item.equals(stack.getItem()))
-                    .filter(sale -> saleableCount(inventory, stack, reservedTools) >= sale.count())
-                .findFirst();
-            MaterialSale sale = configured.orElseGet(() -> fallbackSale(stack, inventory, reservedTools));
+            MaterialSale sale = saleFor(stack, inventory, configuredSales, reservedTools);
             if (sale.count() > 0 && sale.emeraldPrice() > 0
                     && offers.stream().noneMatch(existing -> sale.matches(existing))) {
                 offers.add(sale.offer());
@@ -163,7 +163,24 @@ public final class GatheredMaterialTrades {
                 && offer.getPriceMultiplier() == PRICE_MULTIPLIER;
     }
 
+    private static MaterialSale saleFor(ItemStack stack, VillagerWorkInventory inventory,
+                                        List<MaterialSale> configuredSales, Set<Item> reservedTools) {
+        Optional<MaterialSale> configured = configuredSales.stream()
+                .filter(sale -> sale.item.equals(stack.getItem()))
+                .findFirst();
+        if (configured.isPresent()) {
+            MaterialSale sale = configured.get();
+            return saleableCount(inventory, stack, reservedTools) >= sale.count()
+                    ? sale : new MaterialSale(stack.getItem(), 0, 0);
+        }
+        return fallbackSale(stack, inventory, reservedTools);
+    }
+
     private static MaterialSale fallbackSale(ItemStack stack, VillagerWorkInventory inventory, Set<Item> reservedTools) {
+        // Currency and survival food are operating reserves, never gathered merchandise.
+        if (stack.is(Items.EMERALD) || VillagerNutrition.nutrition(stack) > 0) {
+            return new MaterialSale(stack.getItem(), 0, 0);
+        }
         int available = saleableCount(inventory, stack, reservedTools);
         if (available <= 0) {
             return new MaterialSale(stack.getItem(), 0, 0);

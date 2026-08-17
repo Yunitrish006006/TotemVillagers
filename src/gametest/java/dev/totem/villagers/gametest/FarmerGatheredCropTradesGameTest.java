@@ -35,17 +35,31 @@ public final class FarmerGatheredCropTradesGameTest {
             VillagerWorkInventory inventory = VillagerWorkInventorySavedData.forServer(server).inventory(farmer.getUUID());
             require(helper, inventory.insertExact(new ItemStack(Items.BREAD, 4)),
                     "Could not seed the Farmer survival-food reserve");
-            require(helper, inventory.insertExact(new ItemStack(Items.CARROT, 20)),
+            require(helper, inventory.insertExact(new ItemStack(Items.CARROT, 16)),
                     "Could not seed harvested carrots in the Farmer work inventory");
+            require(helper, inventory.insertExact(new ItemStack(Items.WHEAT, 16)),
+                    "Could not seed harvested wheat in the Farmer work inventory");
+            require(helper, inventory.insertExact(new ItemStack(Items.BEETROOT, 12)),
+                    "Could not seed harvested beetroot in the Farmer work inventory");
             require(helper, inventory.insertExact(new ItemStack(Items.WHEAT_SEEDS, 32)),
                     "Could not seed harvested wheat seeds in the Farmer work inventory");
 
             VillagerTradeStockAuthority.refreshOffers(farmer, offers);
             MerchantOffer carrots = offers.stream().filter(FarmerGatheredCropTrades::isManagedOffer)
                     .filter(offer -> offer.getResult().is(Items.CARROT)).findFirst().orElse(null);
-            require(helper, carrots != null && carrots.getResult().getCount() == 20
+            require(helper, carrots != null && carrots.getResult().getCount() == 16
                             && carrots.getBaseCostA().is(Items.EMERALD) && carrots.getBaseCostA().getCount() == 1,
-                    "Farmer did not publish the 20-carrots-for-one-emerald physical-stock row");
+                    "Farmer carrot resale did not retain a margin below the vanilla purchase batch");
+            MerchantOffer wheat = offers.stream().filter(FarmerGatheredCropTrades::isManagedOffer)
+                    .filter(offer -> offer.getResult().is(Items.WHEAT)).findFirst().orElse(null);
+            require(helper, wheat != null && wheat.getResult().getCount() == 16
+                            && wheat.getBaseCostA().is(Items.EMERALD) && wheat.getBaseCostA().getCount() == 1,
+                    "Farmer wheat resale did not retain a margin below the twenty-wheat vanilla purchase batch");
+            MerchantOffer beetroot = offers.stream().filter(FarmerGatheredCropTrades::isManagedOffer)
+                    .filter(offer -> offer.getResult().is(Items.BEETROOT)).findFirst().orElse(null);
+            require(helper, beetroot != null && beetroot.getResult().getCount() == 12
+                            && beetroot.getBaseCostA().is(Items.EMERALD) && beetroot.getBaseCostA().getCount() == 1,
+                    "Farmer beetroot resale did not retain a margin below the fifteen-beetroot vanilla purchase batch");
             MerchantOffer wheatSeeds = offers.stream().filter(FarmerGatheredCropTrades::isManagedOffer)
                     .filter(offer -> offer.getResult().is(Items.WHEAT_SEEDS)).findFirst().orElse(null);
             require(helper, wheatSeeds != null && wheatSeeds.getResult().getCount() == 32
@@ -53,8 +67,11 @@ public final class FarmerGatheredCropTradesGameTest {
                     "Farmer did not publish a physical surplus-seed sale row");
 
             VillagerTradeStockAuthority.debitAfterSuccessfulTrade(farmer, carrots);
+            VillagerTradeStockAuthority.debitAfterSuccessfulTrade(farmer, wheat);
+            VillagerTradeStockAuthority.debitAfterSuccessfulTrade(farmer, beetroot);
             VillagerTradeStockAuthority.debitAfterSuccessfulTrade(farmer, wheatSeeds);
-            require(helper, count(inventory, Items.CARROT) == 0 && count(inventory, Items.WHEAT_SEEDS) == 0
+            require(helper, count(inventory, Items.CARROT) == 0 && count(inventory, Items.WHEAT) == 0
+                            && count(inventory, Items.BEETROOT) == 0 && count(inventory, Items.WHEAT_SEEDS) == 0
                             && count(inventory, Items.BREAD) == 4
                             && !offers.contains(carrots) && !offers.contains(wheatSeeds),
                     "Farmer crop sale did not debit the harvest batch while preserving survival food");

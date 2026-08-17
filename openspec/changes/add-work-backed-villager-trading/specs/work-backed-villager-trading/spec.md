@@ -92,10 +92,13 @@ specialist's personal work inventory. A successful trade SHALL consume that
 physical batch and SHALL NOT mint or debit separate merchant stock. Miner rows
 SHALL include its stone and configured ore-drop materials: common stone sells
 in 16-item batches for one emerald, coal/raw copper in 8-item batches for one,
-raw iron/quartz in 4-item batches for one, raw gold/redstone/lapis in 3-item
-batches for one, diamond/emerald singly for six, and ancient debris singly for
-twelve. Lumberjack rows SHALL include its actual logs, saplings, sticks and
-apples at 8/8/32/4 items for one emerald respectively.
+raw iron/quartz in 4-item batches for one, iron ingots in 3-item batches for
+one, raw gold/redstone/lapis in 3-item batches for one, gold ingots in 2-item
+batches for one, diamonds singly for six, and ancient debris singly for twelve.
+Lumberjack rows SHALL include its actual logs, saplings, sticks and apples at
+1/8/16/4 items for one emerald respectively. Fallback rows SHALL exclude
+emerald currency and edible survival reserves. No offer may both charge and
+return emeralds.
 
 #### Scenario: Miner supplies Librarian lapis
 
@@ -147,16 +150,18 @@ potatoes, poisonous potatoes, beetroots and beetroot seeds only while the
 complete result batch is physically present as surplus beyond its total
 20-nutrition survival reserve. A successful trade SHALL consume that exact
 batch and SHALL NOT mint or debit separate merchant stock. Wheat, carrots and potatoes SHALL sell in
-20-item batches for one emerald; beetroots in 15-item batches; wheat and
+16-item batches for one emerald; beetroots in 12-item batches; wheat and
 beetroot seeds in 32-item batches; and poisonous potatoes in 16-item batches.
+Where vanilla buys the same crop, the resale batch SHALL be smaller than the
+purchase batch so the Farmer retains a positive material spread.
 
 #### Scenario: Farmer crop offer follows physical stock
 
-- **WHEN** a Farmer has at least 20 physical carrots plus another stored
+- **WHEN** a Farmer has at least 16 physical carrots plus another stored
   20-nutrition survival reserve in its work inventory
-- **THEN** its merchant list includes a 20-carrot-for-1-emerald row
+- **THEN** its merchant list includes a 16-carrot-for-1-emerald row
 - **AND WHEN** the row is traded
-- **THEN** exactly 20 carrots are removed and that row is removed until the
+- **THEN** exactly 16 carrots are removed and that row is removed until the
   Farmer harvests enough carrots again.
 
 ### Requirement: Local villager material market

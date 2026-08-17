@@ -60,6 +60,13 @@ public final class VillagerTradeStockAuthority {
         if (!(merchant instanceof Villager villager) || !(villager.level() instanceof ServerLevel level)) {
             return;
         }
+        offers.removeIf(offer -> {
+            if (!VillagerOfferSides.isEmeraldSelfExchange(offer)) {
+                return false;
+            }
+            offer.setToOutOfStock();
+            return true;
+        });
         WorkBackedTradingMode mode = WorkBackedTradingSettingsSavedData.forServer(level.getServer()).settings().mode();
         if (!mode.enforcesWorkBackedTrading()) {
             // These custom professions deliberately have no vanilla trade set.

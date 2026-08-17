@@ -519,6 +519,26 @@ The final verification pass used Java 25 and the release artifacts in
   --no-interactive` — passed.
 - `./gradlew build sourcesJar -x runGameTest` — passed for version `0.1.21`.
 
+## Incremental verification — 2026-08-17 (village-positive player trade spreads)
+
+- Specialist offers now reject every emerald-for-emerald self exchange and
+  remove stale legacy rows before a player can trade them. Emerald operating
+  currency and edible survival reserves are excluded from gathered-material
+  fallback pricing.
+- Farmer wheat/carrot/potato and beetroot resale batches are now 16 and 12,
+  below their corresponding vanilla purchase batches. Miner iron and gold
+  ingot batches are 3 and 2, below the blacksmith and Cleric purchase batches.
+  Lumberjack log and stick rows are 1 and 16 per emerald, leaving a village
+  margin after player stick or boat crafting and resale.
+- `./gradlew check` — passed on Java 25, including all 121 required server
+  GameTests. Regression coverage seeds the former two-emerald-for-eight-
+  emerald row, specialist operating currency and survival bread, and requires
+  all invalid merchandise to be removed while the positive-spread rows remain.
+- `./gradlew build sourcesJar -x runGameTest` — passed for version `0.1.26`.
+- `openspec validate add-work-backed-villager-trading --strict
+  --no-interactive` was not executed because the `openspec` executable is not
+  installed on this host; no validation pass is claimed for this command.
+
 ## SHA-512 artifacts
 
 | Artifact | SHA-512 |
@@ -559,3 +579,5 @@ The final verification pass used Java 25 and the release artifacts in
 | `totem-villagers-0.1.20-sources.jar` | `5a129a2e7983077b2e22de98961001ea8bf2bfaf737a39ae206d757ee1416bce541b3c048afd08559639fcf39a1bfd5d87977d7ea7408d9225cdd03851124946` |
 | `totem-villagers-0.1.21.jar` | `39cd4b11407415c8298c5e0c71e336d4a7ee113780d756064c5fc553dd9bb7c692e512026a421123bde4c47644ceb3685c003d8c3d88df158357a52a85e054de` |
 | `totem-villagers-0.1.21-sources.jar` | `d2da207cb9361df527eb0ea70c99dc60e9dc6eb90892042d34ef44d85e142c689a037fc4734152bce56fc28828e96cb18a11611ef20374677dbf8e1388cb2449` |
+| `totem-villagers-0.1.26.jar` | `f6836fd38b4bee55d2fcfd4caa8d33327f943466fc10cc2b65c3916dc9e855730d6c2035fa4dacfa7fdd33b7eade0c801077d5c02ca87444aeb1c43a5b4f2595` |
+| `totem-villagers-0.1.26-sources.jar` | `190ef290c00b8eb0e30ef72536ee4cab157c9530707d95388574f2bdf36eac518eb72d818bdb7ea4d55787f3e0eff99088149e65aa52e2ad478974ea85045ca2` |

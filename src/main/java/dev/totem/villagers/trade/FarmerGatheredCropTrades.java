@@ -22,8 +22,8 @@ public final class FarmerGatheredCropTrades {
     private static final int VILLAGER_XP_PER_SALE = 1;
     private static final float PRICE_MULTIPLIER = 0.05F;
     private static final List<CropSale> SALES = List.of(
-            sale(Items.WHEAT, 20), sale(Items.WHEAT_SEEDS, 32), sale(Items.CARROT, 20),
-            sale(Items.POTATO, 20), sale(Items.POISONOUS_POTATO, 16), sale(Items.BEETROOT, 15),
+            sale(Items.WHEAT, 16), sale(Items.WHEAT_SEEDS, 32), sale(Items.CARROT, 16),
+            sale(Items.POTATO, 16), sale(Items.POISONOUS_POTATO, 16), sale(Items.BEETROOT, 12),
             sale(Items.BEETROOT_SEEDS, 32)
     );
 

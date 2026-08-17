@@ -230,11 +230,13 @@ is physically consumed on newly replanted crops, preventing permanent seed and
 wheat accumulation without deleting the overflow.
 
 The Farmer also sells only its physically harvested crop surplus. A dynamic row
-appears at 20 wheat/carrots/potatoes, 15 beetroots, 32 wheat or beetroot seeds,
+appears at 16 wheat/carrots/potatoes, 12 beetroots, 32 wheat or beetroot seeds,
 or 16 poisonous potatoes; each complete batch costs one emerald and is removed
 from the personal work inventory when sold. The row disappears immediately if
 the stored amount falls below its batch, just like Miner and Lumberjack material
-rows.
+rows. These resale batches are deliberately smaller than the corresponding
+vanilla purchase batches, so a round trip leaves the Farmer with a material
+margin instead of giving the player a free trade cycle.
 
 ### Miner lapis and Lumberjack apples
 
@@ -286,9 +288,11 @@ in personal storage so an unattended mine cannot grow inventory without bound.
 | Cobblestone, cobbled deepslate, stone, deepslate | 16 | 1 emerald |
 | Coal, raw copper | 8 | 1 emerald |
 | Raw iron, quartz | 4 | 1 emerald |
+| Iron ingot | 3 | 1 emerald |
 | Raw gold, redstone, lapis lazuli | 3 | 1 emerald |
+| Gold ingot | 2 | 1 emerald |
 | Gold nuggets | 16 | 1 emerald |
-| Diamond, emerald | 1 | 6 emeralds |
+| Diamond | 1 | 6 emeralds |
 | Ancient debris | 1 | 12 emeralds |
 
 Silk-Touch ore-block drops are also saleable at 2–8 emeralds according to the
@@ -301,11 +305,17 @@ It resolves both the logs and its bounded leaf canopy through Minecraft's live
 loot tables using that exact axe. This means apples, saplings and sticks are
 gathered only when the actual leaf-drop rolls produce them; a data pack's
 altered tree loot applies automatically. A Lumberjack sells
-eight logs for one emerald, eight saplings for one emerald, 32 sticks for one
-emerald, and four apples for one emerald. Its dynamic log and sapling rows also
+one log for one emerald, eight saplings for one emerald, 16 sticks for one
+emerald, and four apples for one emerald. The log and stick prices keep a
+village-positive spread after player crafting against Fletcher stick and
+Fisherman boat purchase rows. Its dynamic log and sapling rows also
 cover the other native wood variants when a data pack extends its forest-work
 tag. Both specialist rows deduct their actual stored items when a player trades,
 then disappear immediately when their physical supply is insufficient.
+
+Specialist fallback rows never expose emerald operating currency or edible
+survival reserves as merchandise. The server also removes any legacy offer
+that asks for emeralds and returns emeralds, before it can be traded.
 
 Only the persisted Lumberjack Zone of a generated village is a rooted nursery:
 after an atomic harvest it guarantees the order-declared sapling remains planted

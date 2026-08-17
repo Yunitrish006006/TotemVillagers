@@ -16,4 +16,11 @@ public final class VillagerOfferSides {
     public static boolean isVillagerSellOffer(MerchantOffer offer) {
         return !offer.getResult().is(Items.EMERALD);
     }
+
+    /** A currency payment may never return the same currency as merchandise. */
+    public static boolean isEmeraldSelfExchange(MerchantOffer offer) {
+        return offer != null && !offer.getResult().isEmpty()
+                && offer.getResult().is(Items.EMERALD)
+                && offer.getBaseCostA().is(Items.EMERALD);
+    }
 }
