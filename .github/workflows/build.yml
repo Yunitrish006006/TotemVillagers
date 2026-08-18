@@ -50,38 +50,37 @@ jobs:
           ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
           test -n "$core_version"
-          test -f ".lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
+          test -f "$core_jar"
+          echo "CORE_JAR=$core_jar" >> "$GITHUB_ENV"
 
       - name: Build TotemRemnant
         shell: bash
         run: |
           set -euo pipefail
-          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant \
-            -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace
-          remnant_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
-          test -n "$remnant_version"
-          test -f ".lockstep/TotemRemnant/build/libs/totem-remnant-${remnant_version}.jar"
+            -PtotemCoreJar="$CORE_JAR" jar --no-daemon --stacktrace
+          remnant_jar="$(find "${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs" \
+            -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' -print -quit)"
+          test -n "$remnant_jar"
+          test -f "$remnant_jar"
+          echo "Using TotemRemnant artifact: $(basename "$remnant_jar")"
+          echo "REMNANT_JAR=$remnant_jar" >> "$GITHUB_ENV"
 
       - name: Compile and test Villagers
         shell: bash
         run: |
           set -euo pipefail
-          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          remnant_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
-          remnant_jar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-${remnant_version}.jar"
-          ./gradlew -PtotemCoreJar="$core_jar" -PtotemRemnantJar="$remnant_jar" \
+          test -f "$CORE_JAR"
+          test -f "$REMNANT_JAR"
+          ./gradlew -PtotemCoreJar="$CORE_JAR" -PtotemRemnantJar="$REMNANT_JAR" \
             test assemble compileGametestJava --no-daemon --stacktrace
 
       - name: Run server GameTests
         shell: bash
         run: |
           set -euo pipefail
-          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          remnant_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
-          remnant_jar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-${remnant_version}.jar"
-          ./gradlew -PtotemCoreJar="$core_jar" -PtotemRemnantJar="$remnant_jar" \
+          test -f "$CORE_JAR"
+          test -f "$REMNANT_JAR"
+          ./gradlew -PtotemCoreJar="$CORE_JAR" -PtotemRemnantJar="$REMNANT_JAR" \
             runGameTest --no-daemon --stacktrace
