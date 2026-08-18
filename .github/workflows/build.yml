@@ -60,11 +60,12 @@ jobs:
           set -euo pipefail
           ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant \
             -PtotemCoreJar="$CORE_JAR" jar --no-daemon --stacktrace
-          remnant_jar="$(find "${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs" \
-            -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' -print -quit)"
+          remnant_jar="$(find "$GITHUB_WORKSPACE" -type f \
+            -name 'totem-remnant-*.jar' ! -name '*-sources.jar' \
+            ! -path '*/.gradle/*' -print -quit)"
           test -n "$remnant_jar"
           test -f "$remnant_jar"
-          echo "Using TotemRemnant artifact: $(basename "$remnant_jar")"
+          echo "Using TotemRemnant artifact: ${remnant_jar#${GITHUB_WORKSPACE}/}"
           echo "REMNANT_JAR=$remnant_jar" >> "$GITHUB_ENV"
 
       - name: Compile and test Villagers
