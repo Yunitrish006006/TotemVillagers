@@ -29,6 +29,7 @@
       "dev.totem.villagers.gametest.VillagerMaterialLogisticsGameTest",
       "dev.totem.villagers.gametest.VillagerResourceWorkforceGameTest",
       "dev.totem.villagers.gametest.VillageWorldgenBootstrapGameTest",
+      "dev.totem.villagers.gametest.VillageUtilityProjectionGameTest",
       "dev.totem.villagers.gametest.WoodcutterGameTest",
       "dev.totem.villagers.gametest.LumberjackWoodcutterRuntimeGameTest",
       "dev.totem.villagers.gametest.GuardConstructionGameTest",

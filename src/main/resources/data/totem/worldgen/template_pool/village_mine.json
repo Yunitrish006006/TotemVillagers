@@ -4,7 +4,7 @@
       "element": {
         "element_type": "totem:village_utilities",
         "facility": "mine",
-        "projection": "rigid"
+        "projection": "terrain_matching"
       },
       "weight": 1
     }
