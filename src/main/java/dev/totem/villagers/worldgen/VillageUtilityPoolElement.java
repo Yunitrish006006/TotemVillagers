@@ -38,10 +38,11 @@ import java.util.List;
  * post-processed only in its anchor chunk. This element gives the jigsaw
  * piece its full horizontal bounds and writes its own clipped portion, so each
  * intersecting structure chunk receives the appropriate surface and
- * underground blocks during normal village generation. Chunk generation is
- * already full-height, therefore the shaft must not enlarge the jigsaw's
- * vertical box: a rigid jigsaw connection would otherwise align that box's
- * bottom and lift the surface entrance above its town-centre connector.
+ * underground blocks during normal village generation. The surface utility
+ * pools use terrain-matching projection so their collision boxes and visible
+ * entrances follow the local village ground instead of inheriting the remote
+ * town-centre connector height. The shaft remains excluded from the advertised
+ * vertical bounds because chunk generation already spans the full world height.
  */
 public final class VillageUtilityPoolElement extends StructurePoolElement {
     public static final Identifier ID = Identifier.fromNamespaceAndPath("totem", "village_utilities");
