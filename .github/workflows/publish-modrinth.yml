@@ -1,0 +1,140 @@
+name: Publish Modrinth
+
+on:
+  push:
+    branches: [main]
+    paths: [gradle.properties]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Validate the build and Modrinth credentials without creating a version
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modrinth-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether this is a release
+        id: release
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          REQUESTED_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          current_version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          test -n "$current_version"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo 'should_publish=true' >> "$GITHUB_OUTPUT"
+            echo "dry_run=${REQUESTED_DRY_RUN}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          previous_version="$(git show "${BEFORE_SHA}:gradle.properties" 2>/dev/null | sed -n 's/^mod_version=//p' || true)"
+          if [[ -n "$previous_version" && "$previous_version" == "$current_version" ]]; then
+            echo 'should_publish=false' >> "$GITHUB_OUTPUT"
+            echo 'dry_run=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'should_publish=true' >> "$GITHUB_OUTPUT"
+            echo 'dry_run=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Java 25
+        if: steps.release.outputs.should_publish == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        if: steps.release.outputs.should_publish == 'true'
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Check out pinned TotemCore source
+        if: steps.release.outputs.should_publish == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Yunitrish006006/TotemCore
+          ref: 6f0d146379c3e0d7ed8fc6a665fc896c877afb90
+          path: .lockstep/TotemCore
+          persist-credentials: false
+
+      - name: Build release JAR
+        if: steps.release.outputs.should_publish == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew .lockstep/TotemCore/gradlew
+          ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
+          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
+          test "$core_version" = '0.6.1'
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
+          test -f "$core_jar"
+          ./gradlew -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace
+          mod_version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          archive_name="$(sed -n 's/^archives_base_name=//p' gradle.properties)"
+          artifact="build/libs/${archive_name}-${mod_version}.jar"
+          if [[ ! -f "$artifact" ]]; then
+            ./gradlew -PtotemCoreJar="$core_jar" remapJar --no-daemon --stacktrace
+          fi
+          test -f "$artifact"
+
+      - name: Validate or publish to Modrinth
+        if: steps.release.outputs.should_publish == 'true'
+        shell: bash
+        env:
+          DRY_RUN: ${{ steps.release.outputs.dry_run }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          MODRINTH_PROJECT_ID: ${{ secrets.MODRINTH_PROJECT_ID }}
+          MODULE_ID: totem-villagers
+        run: |
+          set -euo pipefail
+          mod_version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          archive_name="$(sed -n 's/^archives_base_name=//p' gradle.properties)"
+          minecraft_version="$(sed -n 's/^minecraft_version=//p' gradle.properties)"
+          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
+          artifact="build/libs/${archive_name}-${mod_version}.jar"
+          test -n "$MODRINTH_TOKEN" && test -n "$MODRINTH_PROJECT_ID" && test -f "$artifact"
+          unzip -p "$artifact" fabric.mod.json > /tmp/fabric.mod.json
+          jq -e --arg id "$MODULE_ID" --arg version "$mod_version" --arg minecraft "~${minecraft_version}" --arg core "=${core_version}" '
+            .id == $id and .version == $version and .depends.minecraft == $minecraft and .depends["totem-core"] == $core
+          ' /tmp/fabric.mod.json > /dev/null
+          api_base='https://api.modrinth.com/v2'
+          user_agent="Yunitrish006006/${MODULE_ID}-publisher/1.0"
+          curl_args=(--fail --silent --show-error --retry 3 -H "Authorization: ${MODRINTH_TOKEN}" -H "User-Agent: ${user_agent}")
+          curl "${curl_args[@]}" "${api_base}/user" > /tmp/modrinth-user.json
+          curl "${curl_args[@]}" "${api_base}/project/${MODRINTH_PROJECT_ID}" > /tmp/modrinth-project.json
+          project_id="$(jq -er '.id' /tmp/modrinth-project.json)"
+          sha512="$(sha512sum "$artifact" | awk '{print $1}')"
+          if [[ "$DRY_RUN" == 'true' ]]; then
+            echo "Dry run passed for ${MODULE_ID} ${mod_version}; no Modrinth version was created."
+            exit 0
+          fi
+          curl "${curl_args[@]}" "${api_base}/project/${project_id}/version?include_changelog=false" > /tmp/modrinth-versions.json
+          existing_count="$(jq --arg version "$mod_version" '[.[] | select(.version_number == $version)] | length' /tmp/modrinth-versions.json)"
+          if [[ "$existing_count" != '0' ]]; then
+            existing_sha="$(jq -r --arg version "$mod_version" '.[] | select(.version_number == $version) | (([.files[] | select(.primary == true)][0] // .files[0]).hashes.sha512)' /tmp/modrinth-versions.json)"
+            test "$existing_count" = '1'
+            test "$existing_sha" = "$sha512" || { echo "Version ${mod_version} exists with a different SHA-512." >&2; exit 1; }
+            echo "Modrinth already has byte-identical version ${mod_version}; skipping upload."
+            exit 0
+          fi
+          changelog="$(git log -1 --format=%B)"
+          payload="$(jq -nc --arg name "${MODULE_ID} ${mod_version}" --arg version "$mod_version" --arg changelog "$changelog" --arg project_id "$project_id" --arg minecraft "$minecraft_version" '{name:$name,version_number:$version,changelog:$changelog,dependencies:[],game_versions:[$minecraft],version_type:"release",loaders:["fabric"],featured:false,status:"listed",project_id:$project_id,file_parts:["primary"],primary_file:"primary"}')"
+          curl "${curl_args[@]}" -X POST "${api_base}/version" -F "data=${payload};type=application/json" -F "primary=@${artifact};filename=$(basename "$artifact");type=application/java-archive" > /tmp/modrinth-version.json
+          jq -er '.id' /tmp/modrinth-version.json > /dev/null
