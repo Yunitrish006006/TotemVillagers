@@ -22,9 +22,9 @@
     "fabric-api": "*",
     "minecraft": "~26.2",
     "java": ">=25",
-    "totem-core": "=0.6.1"
+    "totem-core": ">=0.7.0 <0.8.0"
   },
   "suggests": {
-    "totem-remnant": ">=0.1.8"
+    "totem-remnant": ">=0.2.13"
   }
 }
