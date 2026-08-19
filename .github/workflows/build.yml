@@ -62,7 +62,9 @@ jobs:
             -PtotemCoreJar="$CORE_JAR" jar --no-daemon --stacktrace
           remnant_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
           test "$remnant_version" = '0.2.12'
-          remnant_jar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-${remnant_version}.jar"
+          remnant_jar="$(find "$GITHUB_WORKSPACE/.lockstep/TotemRemnant/build/libs" -maxdepth 1 -type f \
+            -name 'totem-remnant-*.jar' ! -name '*-sources.jar' -print -quit)"
+          test -n "$remnant_jar"
           test -f "$remnant_jar"
           echo "REMNANT_JAR=$remnant_jar" >> "$GITHUB_ENV"
 
