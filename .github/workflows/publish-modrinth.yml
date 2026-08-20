@@ -10,7 +10,7 @@ permissions: {contents: write}
 concurrency: {group: 'modrinth-${{ github.workflow }}-${{ github.ref }}', cancel-in-progress: false}
 env:
   MODULE_ID: totem-villagers
-  CORE_REF: 5be940a1fb91d250bb6781193bd49f0f24b40a43
+  CORE_REF: a8cedca207f9d4444ae4a52fd384ebd830fbd026
   REMNANT_REF: 8a6d4c291eb2f5ecf857abc1fcb718ae82b28b46
 jobs:
   publish:
@@ -46,7 +46,7 @@ jobs:
           set -euo pipefail
           chmod +x gradlew .lockstep/TotemCore/gradlew .lockstep/TotemRemnant/gradlew
           ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
-          core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"; test "$core" = 0.7.0
+          core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"; test "$core" = 0.7.2
           core_jar="$GITHUB_WORKSPACE/.lockstep/TotemCore/build/libs/totem-core-${core}.jar"; test -f "$core_jar"
           ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace
           remnant="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"; test "$remnant" = 0.2.13
