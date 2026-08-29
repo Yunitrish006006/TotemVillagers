@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "dev.totem.villagers.gametest.mixin.client",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "ObserverPacketProbeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
