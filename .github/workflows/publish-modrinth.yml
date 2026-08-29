@@ -48,9 +48,10 @@ jobs:
           ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
           core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"; test "$core" = 0.7.12
           core_jar="$GITHUB_WORKSPACE/.lockstep/TotemCore/build/libs/totem-core-${core}.jar"; test -f "$core_jar"
-          ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace
+          ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant -PtotemCoreJar="$core_jar" remapJar --no-daemon --stacktrace
           remnant="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"; test "$remnant" = 0.2.16
-          remnant_jar="$(find "$GITHUB_WORKSPACE/.lockstep/TotemRemnant/build/libs" -maxdepth 1 -type f -name 'totem-remnant-*.jar' ! -name '*-sources.jar' -print -quit)"; test -n "$remnant_jar"; test -f "$remnant_jar"
+          remnant_archive="$(sed -n 's/^archives_base_name=//p' .lockstep/TotemRemnant/gradle.properties)"; test -n "$remnant_archive"
+          remnant_jar="$GITHUB_WORKSPACE/.lockstep/TotemRemnant/build/libs/${remnant_archive}-${remnant}.jar"; test -f "$remnant_jar"
           ./gradlew -PtotemCoreJar="$core_jar" -PtotemRemnantJar="$remnant_jar" jar --no-daemon --stacktrace
           v="$(sed -n 's/^mod_version=//p' gradle.properties)"; a="$(sed -n 's/^archives_base_name=//p' gradle.properties)"; artifact="build/libs/${a}-${v}.jar"
           [[ -f "$artifact" ]] || ./gradlew -PtotemCoreJar="$core_jar" -PtotemRemnantJar="$remnant_jar" remapJar --no-daemon --stacktrace
