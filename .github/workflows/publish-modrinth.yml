@@ -10,8 +10,8 @@ permissions: {contents: write}
 concurrency: {group: 'modrinth-${{ github.workflow }}-${{ github.ref }}', cancel-in-progress: false}
 env:
   MODULE_ID: totem-villagers
-  CORE_REF: a8cedca207f9d4444ae4a52fd384ebd830fbd026
-  REMNANT_REF: 8a6d4c291eb2f5ecf857abc1fcb718ae82b28b46
+  CORE_REF: e9dc2975cca37210f9d3bab2df4830e81af77295
+  REMNANT_REF: a3f9231b50c6c55f03a8c145e80644bd6cff7021
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -46,10 +46,10 @@ jobs:
           set -euo pipefail
           chmod +x gradlew .lockstep/TotemCore/gradlew .lockstep/TotemRemnant/gradlew
           ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
-          core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"; test "$core" = 0.7.2
+          core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"; test "$core" = 0.7.12
           core_jar="$GITHUB_WORKSPACE/.lockstep/TotemCore/build/libs/totem-core-${core}.jar"; test -f "$core_jar"
           ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace
-          remnant="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"; test "$remnant" = 0.2.13
+          remnant="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"; test "$remnant" = 0.2.16
           remnant_jar="$(find "$GITHUB_WORKSPACE/.lockstep/TotemRemnant/build/libs" -maxdepth 1 -type f -name 'totem-remnant-*.jar' ! -name '*-sources.jar' -print -quit)"; test -n "$remnant_jar"; test -f "$remnant_jar"
           ./gradlew -PtotemCoreJar="$core_jar" -PtotemRemnantJar="$remnant_jar" jar --no-daemon --stacktrace
           v="$(sed -n 's/^mod_version=//p' gradle.properties)"; a="$(sed -n 's/^archives_base_name=//p' gradle.properties)"; artifact="build/libs/${a}-${v}.jar"
@@ -64,7 +64,7 @@ jobs:
           set -euo pipefail
           v="$(sed -n 's/^mod_version=//p' gradle.properties)"; a="$(sed -n 's/^archives_base_name=//p' gradle.properties)"; mc="$(sed -n 's/^minecraft_version=//p' gradle.properties)"; artifact="build/libs/${a}-${v}.jar"
           test -n "$MODRINTH_TOKEN"; test -n "$MODRINTH_PROJECT_ID"; test -f "$artifact"; unzip -p "$artifact" fabric.mod.json >/tmp/fabric.mod.json
-          jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.0 <0.8.0' --arg remnant '>=0.2.13' '.id==$id and .version==$v and .depends.minecraft==$mc and .depends["totem-core"]==$core and .suggests["totem-remnant"]==$remnant' /tmp/fabric.mod.json >/dev/null
+          jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.12 <0.8.0' --arg remnant '>=0.2.13' '.id==$id and .version==$v and .depends.minecraft==$mc and .depends["totem-core"]==$core and .suggests["totem-remnant"]==$remnant' /tmp/fabric.mod.json >/dev/null
           api=https://api.modrinth.com/v2; args=(--fail --silent --show-error --retry 3 -H "Authorization: ${MODRINTH_TOKEN}" -H "User-Agent: Yunitrish006006/${MODULE_ID}-publisher/2.0")
           curl "${args[@]}" "$api/project/${MODRINTH_PROJECT_ID}" >/tmp/project.json; p="$(jq -er .id /tmp/project.json)"; sha="$(sha512sum "$artifact"|awk '{print $1}')"
           if [[ "$DRY_RUN" == true ]]; then echo "version=$v" >> "$GITHUB_OUTPUT"; echo "sha512=$sha" >> "$GITHUB_OUTPUT"; exit 0; fi

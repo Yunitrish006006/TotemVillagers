@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "name": "Totem Villagers GameTests",
   "environment": "*",
+  "mixins": [
+    "totem-villagers-gametest.client.mixins.json"
+  ],
   "entrypoints": {
     "fabric-gametest": [
       "dev.totem.villagers.gametest.ComponentAwareStockGameTest",
@@ -44,6 +47,7 @@
       "dev.totem.villagers.gametest.WorldEnablementGameTest"
     ],
     "fabric-client-gametest": [
+      "dev.totem.villagers.client.WoodcutterObserverProviderClientGameTest",
       "dev.totem.villagers.client.TradeSnapshotClientGameTest",
       "dev.totem.villagers.client.VillagerTradeCatalogClientGameTest",
       "dev.totem.villagers.client.MinerHelmetClientGameTest",

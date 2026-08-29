@@ -8,9 +8,9 @@ group = project.maven_group
 base { archivesName = project.archives_base_name }
 
 def totemCoreJar = file(providers.gradleProperty('totemCoreJar')
-        .getOrElse('../TotemCore/build/libs/totem-core-0.7.0.jar'))
+        .getOrElse('../TotemCore/build/libs/totem-core-0.7.12.jar'))
 def totemRemnantJar = file(providers.gradleProperty('totemRemnantJar')
-        .getOrElse('../TotemRemnant/build/libs/totem-remnant-0.2.13.jar'))
+        .getOrElse('../TotemRemnant/build/libs/totem-remnant-0.2.16.jar'))
 
 loom {
     splitEnvironmentSourceSets()

@@ -1,9 +1,13 @@
 package dev.totem.villagers.client;
 
 import dev.totem.villagers.woodcutter.WoodcutterMenu;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.PreeditEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
@@ -13,15 +17,26 @@ import net.minecraft.world.inventory.Slot;
  * Woodcutter menu. It renders only synchronised state; recipe buttons never
  * calculate or fabricate an output on the client.
  */
-public final class WoodcutterScreen extends AbstractContainerScreen<WoodcutterMenu> {
+public final class WoodcutterScreen extends AbstractContainerScreen<WoodcutterMenu>
+        implements ObserverReadOnlyScreen {
     private static final int WIDTH = 176;
     private static final int HEIGHT = 166;
     private static final int PREVIOUS_X = 56;
     private static final int NEXT_X = 105;
     private static final int SELECTOR_Y = 27;
+    private static final int SELECTION_STATUS_Y = 52;
+    private final boolean observerReadOnly;
+    private final Runnable observerStop;
 
     public WoodcutterScreen(WoodcutterMenu menu, Inventory inventory, Component title) {
+        this(menu, inventory, title, false, () -> { });
+    }
+
+    public WoodcutterScreen(WoodcutterMenu menu, Inventory inventory, Component title,
+                            boolean observerReadOnly, Runnable observerStop) {
         super(menu, inventory, title, WIDTH, HEIGHT);
+        this.observerReadOnly = observerReadOnly;
+        this.observerStop = observerStop;
     }
 
     @Override
@@ -33,6 +48,7 @@ public final class WoodcutterScreen extends AbstractContainerScreen<WoodcutterMe
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
+        if (observerReadOnly) return true;
         if (event.button() == 0 && menu.recipeCount() > 1) {
             int next = selectedRecipeAt(event.x(), event.y());
             if (next >= 0 && minecraft.gameMode != null) {
@@ -42,6 +58,31 @@ public final class WoodcutterScreen extends AbstractContainerScreen<WoodcutterMe
         }
         return super.mouseClicked(event, doubled);
     }
+
+    @Override public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        return observerReadOnly || super.mouseDragged(event, dragX, dragY);
+    }
+    @Override public boolean mouseReleased(MouseButtonEvent event) {
+        return observerReadOnly || super.mouseReleased(event);
+    }
+    @Override public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
+        return observerReadOnly || super.mouseScrolled(x, y, horizontal, vertical);
+    }
+    @Override public boolean keyPressed(KeyEvent event) {
+        if (!observerReadOnly) return super.keyPressed(event);
+        if (event.key() == 256) onClose();
+        return true;
+    }
+    @Override public boolean charTyped(CharacterEvent event) {
+        return observerReadOnly || super.charTyped(event);
+    }
+    @Override public boolean preeditUpdated(PreeditEvent event) {
+        return observerReadOnly || super.preeditUpdated(event);
+    }
+    @Override public void onClose() {
+        if (observerReadOnly) observerStop.run(); else super.onClose();
+    }
+    @Override public boolean totem$isObserverReadOnly() { return observerReadOnly; }
 
     private void drawBackground(GuiGraphicsExtractor graphics) {
         graphics.fill(leftPos, topPos, leftPos + WIDTH, topPos + HEIGHT, 0xFFB9A47A);
@@ -65,7 +106,7 @@ public final class WoodcutterScreen extends AbstractContainerScreen<WoodcutterMe
         int selected = menu.selectedRecipeIndex();
         Component status = Component.translatable("gui.totem_villagers.woodcutter.selection",
                 selected + 1, count, menu.requiredInputCount());
-        graphics.centeredText(font, status, leftPos + 88, topPos + 18, 0xFF493825);
+        graphics.centeredText(font, status, leftPos + 88, topPos + SELECTION_STATUS_Y, 0xFF493825);
         drawSelectorButton(graphics, PREVIOUS_X, selected > 0, "‹", mouseX, mouseY);
         drawSelectorButton(graphics, NEXT_X, selected + 1 < count, "›", mouseX, mouseY);
     }

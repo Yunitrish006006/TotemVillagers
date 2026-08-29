@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemCore
-          ref: 5be940a1fb91d250bb6781193bd49f0f24b40a43
+          ref: e9dc2975cca37210f9d3bab2df4830e81af77295
           path: .lockstep/TotemCore
           persist-credentials: false
 
@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemRemnant
-          ref: 8a6d4c291eb2f5ecf857abc1fcb718ae82b28b46
+          ref: a3f9231b50c6c55f03a8c145e80644bd6cff7021
           path: .lockstep/TotemRemnant
           persist-credentials: false
 
@@ -49,7 +49,7 @@ jobs:
           chmod +x .lockstep/TotemCore/gradlew .lockstep/TotemRemnant/gradlew gradlew
           ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test "$core_version" = '0.7.0'
+          test "$core_version" = '0.7.12'
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           test -f "$core_jar"
           echo "CORE_JAR=$core_jar" >> "$GITHUB_ENV"
@@ -61,7 +61,7 @@ jobs:
           ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant \
             -PtotemCoreJar="$CORE_JAR" jar --no-daemon --stacktrace
           remnant_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
-          test "$remnant_version" = '0.2.13'
+          test "$remnant_version" = '0.2.16'
           remnant_jar="$(find "$GITHUB_WORKSPACE" -type f \
             -name 'totem-remnant-*.jar' ! -name '*-sources.jar' \
             ! -path '*/.gradle/*' -print -quit)"
