@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemRemnant
-          ref: 8a6d4c291eb2f5ecf857abc1fcb718ae82b28b46
+          ref: a3f9231b50c6c55f03a8c145e80644bd6cff7021
           path: .lockstep/TotemRemnant
           persist-credentials: false
 
@@ -61,7 +61,7 @@ jobs:
           ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant \
             -PtotemCoreJar="$CORE_JAR" jar --no-daemon --stacktrace
           remnant_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
-          test "$remnant_version" = '0.2.13'
+          test "$remnant_version" = '0.2.16'
           remnant_jar="$(find "$GITHUB_WORKSPACE" -type f \
             -name 'totem-remnant-*.jar' ! -name '*-sources.jar' \
             ! -path '*/.gradle/*' -print -quit)"
