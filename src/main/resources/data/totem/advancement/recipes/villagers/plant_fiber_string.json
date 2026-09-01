@@ -1,0 +1,15 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_plant_fiber": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": { "items": [{ "items": "#totem:plant_fibers" }] }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": { "recipe": "totem:plant_fiber_string" }
+    }
+  },
+  "requirements": [["has_plant_fiber", "has_the_recipe"]],
+  "rewards": { "recipes": ["totem:plant_fiber_string"] }
+}
