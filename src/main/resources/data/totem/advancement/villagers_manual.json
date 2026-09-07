@@ -1,5 +1,5 @@
 {
-  "parent": "deadrecall:villagers_root",
+  "parent": "totem:villagers_root",
   "criteria": {
     "has_manual": {
       "trigger": "minecraft:impossible"

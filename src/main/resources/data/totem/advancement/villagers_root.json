@@ -1,8 +1,11 @@
 {
-  "parent": "deadrecall:root",
+  "parent": "totem:root",
   "criteria": {
     "crafted_composter": {
-      "trigger": "minecraft:impossible"
+      "conditions": {
+        "recipe_id": "minecraft:composter"
+      },
+      "trigger": "minecraft:recipe_crafted"
     }
   },
   "display": {

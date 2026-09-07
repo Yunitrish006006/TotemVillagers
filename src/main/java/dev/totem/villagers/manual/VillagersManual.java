@@ -26,7 +26,7 @@ public final class VillagersManual {
     public static void register() {
         TotemModuleManualSource.register(
                 SECTION,
-                Identifier.fromNamespaceAndPath("deadrecall", "villagers_manual"),
+                Identifier.fromNamespaceAndPath("totem", "villagers_manual"),
                 state -> state.is(Blocks.COMPOSTER)
         );
     }

@@ -1,8 +1,11 @@
 {
-  "parent": "deadrecall:villagers_manual",
+  "parent": "totem:villagers_manual",
   "criteria": {
     "crafted_woodcutter": {
-      "trigger": "minecraft:impossible"
+      "conditions": {
+        "recipe_id": "totem:woodcutter"
+      },
+      "trigger": "minecraft:recipe_crafted"
     }
   },
   "display": {

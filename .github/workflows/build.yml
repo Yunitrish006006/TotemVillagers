@@ -49,7 +49,7 @@ jobs:
           chmod +x .lockstep/TotemCore/gradlew .lockstep/TotemRemnant/gradlew gradlew
           ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test "$core_version" = '0.7.12'
+          test "$core_version" = '0.7.18'
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           test -f "$core_jar"
           echo "CORE_JAR=$core_jar" >> "$GITHUB_ENV"
@@ -61,7 +61,7 @@ jobs:
           ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant \
             -PtotemCoreJar="$CORE_JAR" jar --no-daemon --stacktrace
           remnant_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
-          test "$remnant_version" = '0.2.16'
+          test "$remnant_version" = '0.2.21'
           remnant_jar="$(find "$GITHUB_WORKSPACE" -type f \
             -name 'totem-remnant-*.jar' ! -name '*-sources.jar' \
             ! -path '*/.gradle/*' -print -quit)"
