@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       dry_run: {description: Validate without publishing, required: true, default: true, type: boolean}
-permissions: {contents: write}
+permissions: {contents: write, actions: read}
 concurrency: {group: 'modrinth-${{ github.workflow }}-${{ github.ref }}', cancel-in-progress: false}
 env:
   MODULE_ID: totem-villagers
-  CORE_REF: f87cd10fe8aefce77925b9e75dad237f17f38966
+  CORE_REF: 077924318bf85fa5de7cda73ed0e96abe5df803b
   REMNANT_REF: 1d89395f93d8ea817947db4653919a11355eb548
 jobs:
   publish:
@@ -46,7 +46,7 @@ jobs:
           set -euo pipefail
           chmod +x gradlew .lockstep/TotemCore/gradlew .lockstep/TotemRemnant/gradlew
           ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
-          core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"; test "$core" = 0.7.18
+          core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"; test "$core" = 0.7.21
           core_jar="$GITHUB_WORKSPACE/.lockstep/TotemCore/build/libs/totem-core-${core}.jar"; test -f "$core_jar"
           ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant -PtotemCoreJar="$core_jar" remapJar --no-daemon --stacktrace
           remnant="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"; test "$remnant" = 0.2.21
@@ -56,6 +56,26 @@ jobs:
           v="$(sed -n 's/^mod_version=//p' gradle.properties)"; a="$(sed -n 's/^archives_base_name=//p' gradle.properties)"; artifact="build/libs/${a}-${v}.jar"
           [[ -f "$artifact" ]] || ./gradlew -PtotemCoreJar="$core_jar" -PtotemRemnantJar="$remnant_jar" remapJar --no-daemon --stacktrace
           test -f "$artifact"
+      - name: Require successful Build for this commit
+        if: steps.release.outputs.should_publish == 'true' && steps.release.outputs.dry_run == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in {1..120}; do
+            runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/build.yml/runs?head_sha=${GITHUB_SHA}&event=push&per_page=10")"
+            latest="$(jq -c '.workflow_runs | sort_by(.run_number) | last // null' <<<"$runs")"
+            if [[ "$(jq -r '.status // empty' <<<"$latest")" == completed ]]; then
+              test "$(jq -r '.conclusion' <<<"$latest")" = success || { echo 'Build failed; refusing publication.' >&2; exit 1; }
+              echo "Verified Build for ${GITHUB_SHA}."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo 'Timed out waiting for Build; refusing publication.' >&2
+          exit 1
+
       - name: Publish and verify
         id: modrinth
         if: steps.release.outputs.should_publish == 'true'
@@ -65,14 +85,16 @@ jobs:
           set -euo pipefail
           v="$(sed -n 's/^mod_version=//p' gradle.properties)"; a="$(sed -n 's/^archives_base_name=//p' gradle.properties)"; mc="$(sed -n 's/^minecraft_version=//p' gradle.properties)"; artifact="build/libs/${a}-${v}.jar"
           test -n "$MODRINTH_TOKEN"; test -n "$MODRINTH_PROJECT_ID"; test -f "$artifact"; unzip -p "$artifact" fabric.mod.json >/tmp/fabric.mod.json
-          jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.18 <0.8.0' --arg remnant '>=0.2.13' '.id==$id and .version==$v and .depends.minecraft==$mc and .depends["totem-core"]==$core and .suggests["totem-remnant"]==$remnant' /tmp/fabric.mod.json >/dev/null
+          jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.21 <0.8.0' --arg remnant '>=0.2.13' '.id==$id and .version==$v and .depends.minecraft==$mc and .depends["totem-core"]==$core and .suggests["totem-remnant"]==$remnant' /tmp/fabric.mod.json >/dev/null
           api=https://api.modrinth.com/v2; args=(--fail --silent --show-error --retry 3 -H "Authorization: ${MODRINTH_TOKEN}" -H "User-Agent: Yunitrish006006/${MODULE_ID}-publisher/2.0")
           curl "${args[@]}" "$api/project/${MODRINTH_PROJECT_ID}" >/tmp/project.json; p="$(jq -er .id /tmp/project.json)"; sha="$(sha512sum "$artifact"|awk '{print $1}')"
+          test "$sha" = "$(jq -er .sha512 ".github/staging/release-validation-${v}.json")"
           if [[ "$DRY_RUN" == true ]]; then echo "version=$v" >> "$GITHUB_OUTPUT"; echo "sha512=$sha" >> "$GITHUB_OUTPUT"; exit 0; fi
           curl "${args[@]}" "$api/project/${p}/version?include_changelog=false" >/tmp/versions.json; count="$(jq --arg v "$v" '[.[]|select(.version_number==$v)]|length' /tmp/versions.json)"
-          if [[ "$count" != 0 ]]; then test "$count" = 1; id="$(jq -er --arg v "$v" '.[]|select(.version_number==$v)|.id' /tmp/versions.json)"; rsha="$(jq -er --arg v "$v" '.[]|select(.version_number==$v)|(([.files[]|select(.primary==true)][0]//.files[0]).hashes.sha512)' /tmp/versions.json)"; test "$rsha" = "$sha" || exit 1; else c="$(git log -1 --format=%B)"; data="$(jq -nc --arg n "${MODULE_ID} ${v}" --arg v "$v" --arg c "$c" --arg p "$p" --arg mc "$mc" '{name:$n,version_number:$v,changelog:$c,dependencies:[],game_versions:[$mc],version_type:"release",loaders:["fabric"],featured:false,status:"listed",project_id:$p,file_parts:["primary"],primary_file:"primary",environment:"client_and_server"}')"; curl "${args[@]}" -X POST "$api/version" -F "data=${data};type=application/json" -F "primary=@${artifact};filename=$(basename "$artifact");type=application/java-archive" >/tmp/version.json; id="$(jq -er .id /tmp/version.json)"; fi
+          if [[ "$count" != 0 ]]; then test "$count" = 1; id="$(jq -er --arg v "$v" '.[]|select(.version_number==$v)|.id' /tmp/versions.json)"; rsha="$(jq -er --arg v "$v" '.[]|select(.version_number==$v)|(([.files[]|select(.primary==true)][0]//.files[0]).hashes.sha512)' /tmp/versions.json)"; test "$rsha" = "$sha" || exit 1; else c="$(cat ".github/staging/modrinth-changelog-${v}.md")"; data="$(jq -nc --arg n "${MODULE_ID} ${v}" --arg v "$v" --arg c "$c" --arg p "$p" --arg mc "$mc" '{name:$n,version_number:$v,changelog:$c,dependencies:[{project_id:"P7dR8mSH",dependency_type:"required"},{file_name:"totem-core-0.7.21.jar",dependency_type:"required"},{file_name:"totem-remnant-0.2.25.jar",dependency_type:"optional"}],game_versions:[$mc],version_type:"release",loaders:["fabric"],featured:false,status:"listed",project_id:$p,file_parts:["primary"],primary_file:"primary",environment:"client_and_server"}')"; printf '%s\n' "$data" >/tmp/version-create.json; curl "${args[@]}" -X POST "$api/version" -F 'data=</tmp/version-create.json;type=application/json' -F "primary=@${artifact};filename=$(basename "$artifact");type=application/java-archive" >/tmp/version.json; id="$(jq -er .id /tmp/version.json)"; fi
           curl "${args[@]}" "$api/version/$id" >/tmp/remote.json
           jq -e --arg p "$p" --arg v "$v" --arg mc "$mc" --arg f "$(basename "$artifact")" --arg sha "$sha" '.project_id==$p and .version_number==$v and .game_versions==[$mc] and .loaders==["fabric"] and (([.files[]|select(.primary==true)][0]//.files[0]).filename==$f) and (([.files[]|select(.primary==true)][0]//.files[0]).hashes.sha512==$sha)' /tmp/remote.json >/dev/null
+          jq -e --rawfile notes ".github/staging/modrinth-changelog-${v}.md" '(.dependencies|length)==3 and any(.dependencies[]; .project_id=="P7dR8mSH" and .dependency_type=="required") and any(.dependencies[]; .file_name=="totem-core-0.7.21.jar" and .dependency_type=="required") and any(.dependencies[]; .file_name=="totem-remnant-0.2.25.jar" and .dependency_type=="optional") and ((.changelog|sub("\n+$";""))==($notes|sub("\n+$";"")))' /tmp/remote.json >/dev/null
           echo "version=$v" >> "$GITHUB_OUTPUT"; echo "version_id=$id" >> "$GITHUB_OUTPUT"; echo "sha512=$sha" >> "$GITHUB_OUTPUT"
       - name: Record verified publication
         if: steps.release.outputs.should_publish == 'true' && steps.release.outputs.dry_run == 'false'

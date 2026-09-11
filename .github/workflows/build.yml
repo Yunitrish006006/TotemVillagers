@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemCore
-          ref: e9dc2975cca37210f9d3bab2df4830e81af77295
+          ref: 077924318bf85fa5de7cda73ed0e96abe5df803b
           path: .lockstep/TotemCore
           persist-credentials: false
 
@@ -49,7 +49,7 @@ jobs:
           chmod +x .lockstep/TotemCore/gradlew .lockstep/TotemRemnant/gradlew gradlew
           ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test "$core_version" = '0.7.18'
+          test "$core_version" = '0.7.21'
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           test -f "$core_jar"
           echo "CORE_JAR=$core_jar" >> "$GITHUB_ENV"

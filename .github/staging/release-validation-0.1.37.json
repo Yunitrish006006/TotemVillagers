@@ -1,0 +1,11 @@
+{
+  "version": "0.1.37",
+  "java": 25,
+  "minecraft": "26.2",
+  "artifact": "totem-villagers-0.1.37.jar",
+  "sha512": "9cbc98b8530285c989d61a39444a9a88495a5c04d32c97e981235afc936c77f1084aeac5bebf95af64193950c585bb518540352c9d5c7304383cd399ec7802bb",
+  "unit_tests": 72,
+  "core_dependency": ">=0.7.21 <0.8.0",
+  "validation": "Versioned test, assemble and compileGametestJava passed locally. Previous source validation includes Nexus 108 server GameTests and VanillaTweaks/Alchemy en_us and zh_tw client tests, plus Alchemy/Core localized manual screenshots. Exact release commit CI is required by the publisher.",
+  "independent_review": "Independent source, localization and release workflow reviews completed; reported filename and whitespace fixes applied."
+}
