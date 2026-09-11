@@ -56,6 +56,15 @@ jobs:
           v="$(sed -n 's/^mod_version=//p' gradle.properties)"; a="$(sed -n 's/^archives_base_name=//p' gradle.properties)"; artifact="build/libs/${a}-${v}.jar"
           [[ -f "$artifact" ]] || ./gradlew -PtotemCoreJar="$core_jar" -PtotemRemnantJar="$remnant_jar" remapJar --no-daemon --stacktrace
           test -f "$artifact"
+      - name: Preserve release JAR for verification
+        if: steps.release.outputs.should_publish == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-jar-verification
+          path: build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Require successful Build for this commit
         if: steps.release.outputs.should_publish == 'true' && steps.release.outputs.dry_run == 'false'
         shell: bash
