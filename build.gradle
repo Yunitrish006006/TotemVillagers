@@ -137,8 +137,79 @@ tasks.named('processResources', ProcessResources) {
     }
 }
 
+// Normalize Loom client entry order for reproducible release hashes.
 tasks.named('jar', Jar) {
+    includeEmptyDirs = false
+    from('LICENSE.txt') { rename { "${it}_${project.archives_base_name}" } }
     preserveFileTimestamps = false
     reproducibleFileOrder = true
-    from('LICENSE.txt') { rename { "${it}_${project.archives_base_name}" } }
+
+    doLast {
+        def archive = archiveFile.get().asFile
+        def replacement = new File(archive.parentFile, "${archive.name}.normalized")
+        def source = new java.util.jar.JarFile(archive)
+
+        try {
+            def sourceManifest = source.manifest
+            def normalizedManifest = new java.util.jar.Manifest()
+            def attributes = sourceManifest.mainAttributes
+            normalizedManifest.mainAttributes.putValue(
+                    'Manifest-Version',
+                    attributes.getValue('Manifest-Version') ?: '1.0'
+            )
+
+            attributes.keySet()
+                    .collect { it.toString() }
+                    .findAll { it != 'Manifest-Version' }
+                    .sort()
+                    .each { name ->
+                        def value = attributes.getValue(name)
+                        if (name == 'Fabric-Loom-Client-Only-Entries') {
+                            value = value.split(';').findAll { it }.sort().join(';')
+                        }
+                        normalizedManifest.mainAttributes.putValue(name, value)
+                    }
+
+            def entries = []
+            def enumeration = source.entries()
+            while (enumeration.hasMoreElements()) {
+                entries << enumeration.nextElement()
+            }
+
+            def output = new java.util.jar.JarOutputStream(
+                    new java.io.FileOutputStream(replacement)
+            )
+            try {
+                def manifestEntry = new java.util.zip.ZipEntry('META-INF/MANIFEST.MF')
+                manifestEntry.setTime(0L)
+                output.putNextEntry(manifestEntry)
+                normalizedManifest.write(output)
+                output.closeEntry()
+
+                entries.findAll { it.name != 'META-INF/MANIFEST.MF' }
+                        .sort { it.name }
+                        .each { entry ->
+                            def normalizedEntry = new java.util.zip.ZipEntry(entry.name)
+                            normalizedEntry.setTime(0L)
+                            output.putNextEntry(normalizedEntry)
+                            if (!entry.directory) {
+                                source.getInputStream(entry).withCloseable { input ->
+                                    input.transferTo(output)
+                                }
+                            }
+                            output.closeEntry()
+                        }
+            } finally {
+                output.close()
+            }
+        } finally {
+            source.close()
+        }
+
+        java.nio.file.Files.move(
+                replacement.toPath(),
+                archive.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+        )
+    }
 }
