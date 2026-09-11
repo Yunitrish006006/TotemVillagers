@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemRemnant
-          ref: a3f9231b50c6c55f03a8c145e80644bd6cff7021
+          ref: 1d89395f93d8ea817947db4653919a11355eb548
           path: .lockstep/TotemRemnant
           persist-credentials: false
 
