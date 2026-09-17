@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemCore
-          ref: 077924318bf85fa5de7cda73ed0e96abe5df803b
+          ref: 424b90dc3929caa8c1afcfca7e63c50a64bde669
           path: .lockstep/TotemCore
           persist-credentials: false
 
@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemRemnant
-          ref: 1d89395f93d8ea817947db4653919a11355eb548
+          ref: 5cbf0dde947862c5ebf9bb81cee47c8d4b3a9648
           path: .lockstep/TotemRemnant
           persist-credentials: false
 
@@ -49,7 +49,7 @@ jobs:
           chmod +x .lockstep/TotemCore/gradlew .lockstep/TotemRemnant/gradlew gradlew
           ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test "$core_version" = '0.7.21'
+          test "$core_version" = '0.7.23'
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           test -f "$core_jar"
           echo "CORE_JAR=$core_jar" >> "$GITHUB_ENV"
@@ -61,10 +61,8 @@ jobs:
           ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant \
             -PtotemCoreJar="$CORE_JAR" jar --no-daemon --stacktrace
           remnant_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
-          test "$remnant_version" = '0.2.21'
-          remnant_jar="$(find "$GITHUB_WORKSPACE" -type f \
-            -name 'totem-remnant-*.jar' ! -name '*-sources.jar' \
-            ! -path '*/.gradle/*' -print -quit)"
+          test "$remnant_version" = '0.2.27'
+          remnant_jar="$GITHUB_WORKSPACE/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.27.jar"
           test -n "$remnant_jar"
           test -f "$remnant_jar"
           echo "Using TotemRemnant artifact: ${remnant_jar#${GITHUB_WORKSPACE}/}"
@@ -87,3 +85,34 @@ jobs:
           test -f "$REMNANT_JAR"
           ./gradlew -PtotemCoreJar="$CORE_JAR" -PtotemRemnantJar="$REMNANT_JAR" \
             runGameTest --no-daemon --stacktrace
+
+      - name: Bind validated release artifact to this Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          archive="$(sed -n 's/^archives_base_name=//p' gradle.properties)"
+          artifact="${archive}-${version}.jar"
+          core_source="$(git -C .lockstep/TotemCore rev-parse HEAD)"
+          test "$core_source" = 424b90dc3929caa8c1afcfca7e63c50a64bde669
+          core_sha="$(sha512sum .lockstep/TotemCore/build/libs/totem-core-0.7.23.jar | awk '{print $1}')"
+          test "$core_sha" = "$(jq -er .core_artifact_sha512 ".github/staging/release-validation-${version}.json")"
+          sha="$(sha512sum "build/libs/${artifact}" | awk '{print $1}')"
+          test "$sha" = "$(jq -er .sha512 ".github/staging/release-validation-${version}.json")"
+          dependency_source="$(git -C .lockstep/TotemRemnant rev-parse HEAD)"
+          test "$dependency_source" = 5cbf0dde947862c5ebf9bb81cee47c8d4b3a9648
+          dependency_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
+          test "$dependency_version" = 0.2.27
+          dependency_sha="$(sha512sum .lockstep/TotemRemnant/build/libs/totem-remnant-0.2.27.jar | awk '{print $1}')"
+          test "$dependency_sha" = "$(jq -er .remnant_artifact_sha512 ".github/staging/release-validation-${version}.json")"
+          mkdir -p build/release-artifact
+          cp "build/libs/${artifact}" build/release-artifact/
+          jq -n --arg repository "$GITHUB_REPOSITORY" --arg source "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg version "$version" --arg artifact "$artifact" --arg sha "$sha" --arg core_source "$core_source" --arg core_sha "$core_sha" --arg dependency_source "$dependency_source" --arg dependency_sha "$dependency_sha" '{repository:$repository,source_commit:$source,run_id:$run,run_attempt:$attempt,version:$version,artifact:$artifact,sha512:$sha,core_version:"0.7.23",core_source_commit:$core_source,core_artifact_sha512:$core_sha,remnant_source_commit:$dependency_source,remnant_version:"0.2.27",remnant_artifact_sha512:$dependency_sha}' > build/release-artifact/build-provenance.json
+
+      - name: Upload immutable validated release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.sha }}-${{ github.run_attempt }}
+          path: build/release-artifact/
+          if-no-files-found: error
+          retention-days: 14

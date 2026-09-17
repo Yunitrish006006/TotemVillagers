@@ -42,7 +42,7 @@ public final class MineShaftClientGameTest implements FabricClientGameTest {
             singleplayer.getServer().runCommand("execute in minecraft:overworld run gamemode spectator @a");
             singleplayer.getServer().runCommand("execute in minecraft:overworld run tp @a 1.35 10.50 0.5 -90 0");
             context.waitTicks(12);
-            singleplayer.getClientLevel().waitForChunksRender();
+            singleplayer.getConnection().waitForChunksRender();
             context.runOnClient(client -> {
                 if (client.player == null) {
                     throw new AssertionError("Mine screenshot player was unavailable");
@@ -61,7 +61,7 @@ public final class MineShaftClientGameTest implements FabricClientGameTest {
 
             singleplayer.getServer().runCommand("execute in minecraft:overworld run tp @a -8.5 15.5 -10.5");
             context.waitTicks(8);
-            singleplayer.getClientLevel().waitForChunksRender();
+            singleplayer.getConnection().waitForChunksRender();
             context.runOnClient(client -> {
                 if (client.player == null) {
                     throw new AssertionError("Mine-head screenshot player was unavailable");

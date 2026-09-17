@@ -3,6 +3,7 @@ package dev.totem.villagers.world;
 import dev.totem.villagers.inventory.VillagerWorkInventory;
 import dev.totem.villagers.work.WorkOrder;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -80,7 +81,7 @@ public final class FarmerWorldWorkAction {
         }
         if (reservation.commitWithReturns(List.copyOf(returned))) {
             applyStoredBoneMeal(level, cropPosition, inventory);
-            farmer.swing(InteractionHand.MAIN_HAND);
+            farmer.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
             farmer.playWorkSound();
             return true;
         }

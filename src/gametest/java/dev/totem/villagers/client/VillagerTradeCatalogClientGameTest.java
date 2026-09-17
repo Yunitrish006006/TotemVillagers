@@ -199,7 +199,7 @@ public final class VillagerTradeCatalogClientGameTest implements FabricClientGam
             return result;
         }
         LootContext context = tradeContext(level, villager, set);
-        for (var trade : set.getTrades()) {
+        for (var trade : set.trades()) {
             MerchantOffer offer = trade.value().getOffer(context);
             if (offer != null) {
                 result.add(offer);

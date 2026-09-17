@@ -7,6 +7,7 @@ import dev.totem.villagers.world.ore.MinerIncidentalOreDefinitions;
 import dev.totem.villagers.world.ore.MinerIncidentalOreRule;
 import dev.totem.villagers.world.ore.MinerOreSafetySavedData;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -79,7 +80,7 @@ public final class MinerWorldWorkAction {
             MinerOreSafetySavedData.forServer(level.getServer())
                     .recordMine(miner.getUUID(), plan.incidentalIron());
             extension.ifPresent(plannedExtension -> plannedExtension.apply(level));
-            miner.swing(InteractionHand.MAIN_HAND);
+            miner.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
             miner.playWorkSound();
             return true;
         }

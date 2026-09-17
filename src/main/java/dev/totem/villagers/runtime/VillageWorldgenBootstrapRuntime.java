@@ -137,7 +137,7 @@ public final class VillageWorldgenBootstrapRuntime {
         }
         Registry<Structure> structures = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
         GeneratedVillageSavedData villages = GeneratedVillageSavedData.forServer(level.getServer());
-        level.structureManager().startsForStructure(chunk.getPos(), structure -> isGeneratedVillageStructure(structures, structure))
+        level.structureManager().startsForStructure(chunk.getPos().x(), chunk.getPos().z(), structure -> isGeneratedVillageStructure(structures, structure))
                 .stream()
                 .filter(StructureStart::isValid)
                 .forEach(start -> villages.discover(fromStructure(level, structures, start)));

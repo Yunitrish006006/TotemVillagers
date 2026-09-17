@@ -237,11 +237,11 @@ public final class WorldMaterialDeliveryGameTest {
                     "Could not give the Miner an iron pickaxe");
             MinerWorldWorkAction noDiscovery = new MinerWorldWorkAction(() -> 9_999);
             List<BaseDrop> vanillaBases = List.of(
+                    new BaseDrop(Blocks.STONE, Items.COBBLESTONE),
                     new BaseDrop(Blocks.GRANITE, Items.GRANITE),
                     new BaseDrop(Blocks.DIORITE, Items.DIORITE),
                     new BaseDrop(Blocks.ANDESITE, Items.ANDESITE),
-                    new BaseDrop(Blocks.DEEPSLATE, Items.COBBLED_DEEPSLATE),
-                    new BaseDrop(Blocks.TUFF, Items.TUFF));
+                    new BaseDrop(Blocks.DEEPSLATE, Items.COBBLED_DEEPSLATE));
             for (BaseDrop base : vanillaBases) {
                 helper.getLevel().setBlock(target, base.block().defaultBlockState(), 3);
                 int before = count(inventory.snapshot(), base.drop());
@@ -251,12 +251,14 @@ public final class WorldMaterialDeliveryGameTest {
                 require(helper, count(inventory.snapshot(), base.drop()) == before + 1,
                         "Vanilla base " + base.block() + " did not retain its own live base drop");
             }
-            helper.getLevel().setBlock(target, Blocks.CALCITE.defaultBlockState(), 3);
-            require(helper, !noDiscovery.complete(helper.getLevel(), miner, target, MINER_TARGETS,
-                            minerOrder(), inventory),
-                    "Miner accepted calcite even though vanilla does not use it as an ore-replaceable base");
-            require(helper, helper.getLevel().getBlockState(target).is(Blocks.CALCITE),
-                    "Rejected non-vanilla substrate was still destroyed");
+            for (var rejected : List.of(Blocks.CALCITE, Blocks.TUFF)) {
+                helper.getLevel().setBlock(target, rejected.defaultBlockState(), 3);
+                require(helper, !noDiscovery.complete(helper.getLevel(), miner, target, MINER_TARGETS,
+                                minerOrder(), inventory),
+                        "Miner accepted a block outside vanilla ore-replaceable bases: " + rejected);
+                require(helper, helper.getLevel().getBlockState(target).is(rejected),
+                        "Rejected non-vanilla substrate was still destroyed");
+            }
             helper.succeed();
         } finally {
             miner.discard();

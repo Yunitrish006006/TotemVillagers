@@ -25,7 +25,7 @@ import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.util.Comparator;
 import java.util.List;
@@ -55,7 +55,7 @@ public final class MangroveVillageNaturalWorldClientGameTest implements FabricCl
             // The distant teleport causes the candidate chunks to be generated
             // through the normal random-spread structure pipeline.
             context.waitTicks(240);
-            singleplayer.getClientLevel().waitForChunksRender();
+            singleplayer.getConnection().waitForChunksRender();
             BlockPos bell = verifyNaturalVillage(singleplayer);
             List<NaturalVillage> villages = naturalMangroveVillages(singleplayer);
             require(!villages.isEmpty(), "Natural worldgen did not persist a Mangrove-village bootstrap record");
@@ -64,7 +64,7 @@ public final class MangroveVillageNaturalWorldClientGameTest implements FabricCl
                 singleplayer.getServer().runCommand("execute in minecraft:overworld run tp @a "
                         + village.center().getX() + " " + (village.center().getY() + 18) + " " + village.center().getZ());
                 context.waitTicks(100);
-                singleplayer.getClientLevel().waitForChunksRender();
+                singleplayer.getConnection().waitForChunksRender();
                 WorkerPair workers = waitForNaturalWorkers(context, singleplayer, village);
                 verifyFoundingFisherman(singleplayer, village);
                 showcaseWorkers = workers;
@@ -72,7 +72,7 @@ public final class MangroveVillageNaturalWorldClientGameTest implements FabricCl
             require(showcaseWorkers != null, "Natural worker showcase pair was unavailable");
             int deckY = bell.getY() - 1;
 
-            context.getInput().pressKey(GLFW.GLFW_KEY_F1);
+            context.getInput().pressKey(InputConstants.KEY_F1);
             context.waitTicks(2);
             captureWorker(context, showcaseWorkers.lumberjack(), "totem-villagers-natural-lumberjack-working");
             captureWorker(context, showcaseWorkers.miner(), "totem-villagers-natural-miner-working");
@@ -84,9 +84,9 @@ public final class MangroveVillageNaturalWorldClientGameTest implements FabricCl
             positionCamera(context, bell.getX(), bell.getY() + 65.0D, bell.getZ(),
                     new Vec3(bell.getX(), deckY, bell.getZ() + 0.01D));
             context.waitTicks(8);
-            singleplayer.getClientLevel().waitForChunksRender();
+            singleplayer.getConnection().waitForChunksRender();
             context.takeScreenshot("totem-villagers-mangrove-village-natural-world-aerial");
-            context.getInput().pressKey(GLFW.GLFW_KEY_F1);
+            context.getInput().pressKey(InputConstants.KEY_F1);
             context.waitTicks(2);
         }
     }

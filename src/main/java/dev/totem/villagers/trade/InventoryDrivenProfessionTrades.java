@@ -205,7 +205,7 @@ public final class InventoryDrivenProfessionTrades {
                 continue;
             }
             LootContext context = tradeContext(level, villager, set);
-            for (var trade : set.getTrades()) {
+            for (var trade : set.trades()) {
                 try {
                     MerchantOffer offer = trade.value().getOffer(context);
                     if (offer == null || !VillagerOfferSides.isVillagerSellOffer(offer) || offer.getResult().isEmpty()) {

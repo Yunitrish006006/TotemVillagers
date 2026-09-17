@@ -2,6 +2,7 @@ package dev.totem.villagers.world;
 
 import dev.totem.villagers.inventory.VillagerWorkInventory;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
@@ -89,7 +90,7 @@ public final class ToolsmithFiberWorldWorkAction {
             reservation.rollback();
             return false;
         }
-        toolsmith.swing(InteractionHand.MAIN_HAND);
+        toolsmith.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
         toolsmith.playWorkSound();
         return true;
     }

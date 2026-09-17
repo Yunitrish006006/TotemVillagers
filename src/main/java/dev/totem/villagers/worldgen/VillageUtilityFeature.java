@@ -1,13 +1,14 @@
 package dev.totem.villagers.worldgen;
 
 import dev.totem.villagers.content.TotemVillagerBlocks;
+import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FenceGateBlock;
@@ -18,8 +19,6 @@ import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.levelgen.feature.Feature;
-import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
-import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 /**
@@ -32,10 +31,11 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
  * zones; it never has to construct a replacement facility for a newly
  * generated village.</p>
  */
-public final class VillageUtilityFeature extends Feature<NoneFeatureConfiguration> {
+public final class VillageUtilityFeature implements Feature {
     public static final Identifier ID = Identifier.fromNamespaceAndPath("totem", "village_utilities");
-    public static final Feature<NoneFeatureConfiguration> INSTANCE = Registry.register(BuiltInRegistries.FEATURE,
-            ResourceKey.create(Registries.FEATURE, ID), new VillageUtilityFeature());
+    public static final VillageUtilityFeature INSTANCE = new VillageUtilityFeature();
+    public static final MapCodec<VillageUtilityFeature> CODEC = Registry.register(
+            BuiltInRegistries.FEATURE_TYPE, ID, MapCodec.unit(INSTANCE));
 
     private static final int MINE_RADIUS = 2;
     private static final int MINE_DEPTH = 16;
@@ -47,7 +47,6 @@ public final class VillageUtilityFeature extends Feature<NoneFeatureConfiguratio
     };
 
     private VillageUtilityFeature() {
-        super(NoneFeatureConfiguration.CODEC);
     }
 
     /** Forces static feature registration during common mod initialisation. */
@@ -56,10 +55,14 @@ public final class VillageUtilityFeature extends Feature<NoneFeatureConfiguratio
     }
 
     @Override
-    public boolean place(FeaturePlaceContext<NoneFeatureConfiguration> context) {
-        BlockPos yard = context.origin();
-        placeLumberyard(context.level(), yard, BoundingBox.infinite());
-        return placeMine(context.level(), yard.east(9), BoundingBox.infinite());
+    public MapCodec<VillageUtilityFeature> codec() {
+        return CODEC;
+    }
+
+    @Override
+    public boolean place(WorldGenLevel level, ChunkGenerator generator, RandomSource random, BlockPos yard) {
+        placeLumberyard(level, yard, BoundingBox.infinite());
+        return placeMine(level, yard.east(9), BoundingBox.infinite());
     }
 
     /**

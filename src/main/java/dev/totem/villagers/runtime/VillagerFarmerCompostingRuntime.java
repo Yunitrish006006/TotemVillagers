@@ -88,7 +88,7 @@ public final class VillagerFarmerCompostingRuntime {
             return;
         }
         ItemStack compostable = surplusCompostable(inventory);
-        if (compostable.isEmpty() || !ComposterBlock.COMPOSTABLES.containsKey(compostable.getItem())) {
+        if (compostable.isEmpty() || !compostable.has(net.minecraft.core.component.DataComponents.COMPOSTABLE)) {
             return;
         }
         var reservation = inventory.reserveExactMatchingItem(compostable).orElse(null);

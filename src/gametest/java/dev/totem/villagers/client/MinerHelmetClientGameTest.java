@@ -24,7 +24,7 @@ public final class MinerHelmetClientGameTest implements FabricClientGameTest {
             singleplayer.getServer().runCommand("execute in minecraft:overworld run summon minecraft:villager 0.5 4.0 3.5 "
                     + "{NoAI:1b,NoGravity:1b,Rotation:[180.0f,0.0f],VillagerData:{type:\"minecraft:plains\",profession:\"totem:miner\",level:1}}");
             context.waitTicks(20);
-            singleplayer.getClientLevel().waitForChunksRender();
+            singleplayer.getConnection().waitForChunksRender();
             context.runOnClient(client -> {
                 if (client.player == null) {
                     throw new AssertionError("Miner showcase player was unavailable");
@@ -46,11 +46,11 @@ public final class MinerHelmetClientGameTest implements FabricClientGameTest {
                 Villager miner = client.level.getEntitiesOfClass(Villager.class,
                                 new AABB(-1.0, 3.0, 2.0, 2.0, 7.0, 5.0)).stream()
                         .findFirst().orElseThrow(() -> new AssertionError("Miner showcase entity was unavailable"));
-                // Pin a mid-swing interpolation frame so slow software rendering cannot
-                // skip the six-tick vanilla swing before the screenshot is submitted.
-                miner.swingingArm = InteractionHand.MAIN_HAND;
-                miner.oAttackAnim = 0.45F;
-                miner.attackAnim = 0.55F;
+                miner.swing(InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT, false);
+                var swing = ((dev.totem.villagers.gametest.mixin.client.LivingEntitySwingAccessor) miner).totemVillagers$getSwingState();
+                swing.tick();
+                swing.tick();
+                swing.tick();
             });
             context.takeScreenshot("totem-villagers-miner-working");
             context.waitTicks(2);

@@ -17,6 +17,7 @@ import dev.totem.villagers.worker.WorkerAssignmentSavedData;
 import dev.totem.villagers.world.WorldWorkPermissions;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
@@ -135,7 +136,7 @@ public final class VillagerBuilderRuntime {
             if (!planned.consumesMaterial()) {
                 if (level.setBlock(target, planned.state(), 3)) {
                     sites.updateProgress(currentSite.withNextBlockIndex(index + 1));
-                    builder.swing(InteractionHand.MAIN_HAND);
+                    builder.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
                     builder.playWorkSound();
                 }
                 return;
@@ -155,7 +156,7 @@ public final class VillagerBuilderRuntime {
                 }
                 reservation.commit();
                 sites.updateProgress(currentSite.withNextBlockIndex(index + 1));
-                builder.swing(InteractionHand.MAIN_HAND);
+                builder.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
                 builder.playWorkSound();
             } catch (RuntimeException failure) {
                 // Never restore materials after setBlock succeeded: doing so would mint a free block.

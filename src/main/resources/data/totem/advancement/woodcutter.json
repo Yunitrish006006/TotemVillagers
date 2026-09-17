@@ -3,7 +3,7 @@
   "criteria": {
     "crafted_woodcutter": {
       "conditions": {
-        "recipe_id": "totem:woodcutter"
+        "recipes": "totem:woodcutter"
       },
       "trigger": "minecraft:recipe_crafted"
     }

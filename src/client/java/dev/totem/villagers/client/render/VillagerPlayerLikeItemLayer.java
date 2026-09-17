@@ -89,8 +89,8 @@ public final class VillagerPlayerLikeItemLayer extends RenderLayer<VillagerRende
         }
         poses.pushPose();
         armsModel.translateToHand(arm, poses);
-        poses.mulPose(Axis.XP.rotationDegrees(-90.0F));
-        poses.mulPose(Axis.YP.rotationDegrees(180.0F));
+        poses.rotateDegrees(Axis.XP, -90.0F);
+        poses.rotateDegrees(Axis.YP, 180.0F);
         poses.translate((arm == HumanoidArm.LEFT ? -1.0F : 1.0F) / 16.0F,
                 2.0F / 16.0F, -10.0F / 16.0F);
         item.submit(poses, collector, light, OverlayTexture.NO_OVERLAY, state.outlineColor);

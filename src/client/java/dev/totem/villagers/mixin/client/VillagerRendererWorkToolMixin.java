@@ -47,8 +47,9 @@ abstract class VillagerRendererWorkToolMixin {
         VillagerWorkAnimationRenderState extra = (VillagerWorkAnimationRenderState) state;
         extra.totemVillagers$rightHandItem().clear();
         extra.totemVillagers$leftHandItem().clear();
-        float workProgress = villager.getAttackAnim(tickProgress);
-        HumanoidArm attackArm = armForHand(villager, villager.swingingArm);
+        float workProgress = villager.getSwingAnimation(tickProgress);
+        HumanoidArm attackArm = armForHand(villager, villager.getCurrentSwing() == null
+                ? InteractionHand.MAIN_HAND : villager.getCurrentSwing().hand());
         if (villager.isBaby()) {
             extra.totemVillagers$setPlayerStyleArmState(false, workProgress, attackArm,
                     false, villager.getMainArm(), ItemUseAnimation.NONE, 0.0F, 1.0F);

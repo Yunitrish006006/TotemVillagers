@@ -313,7 +313,7 @@ public final class VillageWorldgenBootstrapGameTest {
                 "minecraft:village/snowy/town_centers/snowy_meeting_point_1",
                 "minecraft:village/taiga/town_centers/taiga_meeting_point_1",
                 "minecraft:village/plains/zombie/town_centers/plains_fountain_01")) {
-            var template = helper.getLevel().getServer().getStructureManager()
+            var template = helper.getLevel().getServer().getStructureTemplateManager()
                     .get(Identifier.parse(templateId))
                     .orElseThrow(() -> helper.assertionException("Missing vanilla town-center template " + templateId));
             long lumberyardConnectors = template.getJigsaws(BlockPos.ZERO, Rotation.NONE).stream()
@@ -792,7 +792,7 @@ public final class VillageWorldgenBootstrapGameTest {
                 || !(pool.getTemplates().getFirst().getFirst() instanceof VillageUtilityPoolElement element)) {
             return false;
         }
-        return element.place(level.getServer().getStructureManager(), level, level.structureManager(),
+        return element.place(level.getServer().getStructureTemplateManager(), level, level.structureManager(),
                 level.getChunkSource().getGenerator(), origin, origin, Rotation.NONE, BoundingBox.infinite(),
                 level.getRandom(), LiquidSettings.APPLY_WATERLOGGING, false);
     }

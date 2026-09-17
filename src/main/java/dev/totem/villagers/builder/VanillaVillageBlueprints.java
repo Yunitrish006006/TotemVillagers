@@ -50,7 +50,7 @@ public final class VanillaVillageBlueprints {
         if (!isAllowedTemplateId(templateId)) {
             return Optional.empty();
         }
-        StructureTemplate template = server.getStructureManager().get(templateId).orElse(null);
+        StructureTemplate template = server.getStructureTemplateManager().get(templateId).orElse(null);
         if (template == null) {
             return Optional.empty();
         }

@@ -8,9 +8,9 @@ group = project.maven_group
 base { archivesName = project.archives_base_name }
 
 def totemCoreJar = file(providers.gradleProperty('totemCoreJar')
-        .getOrElse('../TotemCore/build/libs/totem-core-0.7.21.jar'))
+        .getOrElse('../TotemCore/build/libs/totem-core-0.7.22.jar'))
 def totemRemnantJar = file(providers.gradleProperty('totemRemnantJar')
-        .getOrElse('../TotemRemnant/build/libs/totem-remnant-0.2.21.jar'))
+        .getOrElse('../TotemRemnant/build/libs/totem-remnant-0.2.26.jar'))
 
 loom {
     splitEnvironmentSourceSets()
@@ -53,70 +53,67 @@ dependencies {
 
 tasks.withType(Test).configureEach { useJUnitPlatform() }
 
+def namedRuntimeSources = new LinkedHashSet<File>()
+def namedRuntimeCopies = [:]
+def namedRuntimeCopyFor = { File source ->
+    namedRuntimeCopies.computeIfAbsent(source.absolutePath) {
+        def digest = java.security.MessageDigest.getInstance('SHA-256').digest(source.bytes).encodeHex().toString()
+        layout.buildDirectory.file("named-runtime-api/v2/${digest}-${source.name}").get().asFile
+    }
+}
 tasks.register('normalizeFabricApiTweakersForNamedDevRuntime') {
     group = 'fabric'
-    description = 'Normalizes Fabric API tweaker namespaces for the named development runtime.'
-
+    description = 'Creates isolated named-namespace Fabric API copies for development runs.'
+    inputs.files(provider { namedRuntimeSources })
+    outputs.dir(layout.buildDirectory.dir('named-runtime-api/v2'))
     doLast {
-        def jarFiles = new LinkedHashSet<File>()
-        jarFiles.addAll(configurations.runtimeClasspath.resolve().findAll { file ->
-            file.name.endsWith('.jar') && file.absolutePath.contains("${File.separator}net.fabricmc.fabric-api${File.separator}")
-        })
-
-        [gradle.gradleUserHomeDir, new File(System.getProperty('user.home'), '.gradle')].each { File cacheRoot ->
-            File fabricApiCache = new File(cacheRoot, 'caches/modules-2/files-2.1/net.fabricmc.fabric-api')
-            if (fabricApiCache.isDirectory()) {
-                jarFiles.addAll(fileTree(dir: fabricApiCache, include: '**/*.jar').files.findAll { file ->
-                    !file.name.endsWith('-sources.jar')
-                })
-            }
-        }
-
-        int patchedFiles = 0
-        int patchedEntries = 0
-        jarFiles.each { File jarFile ->
-            File tempFile = new File(buildDir, "tmp/tweaker-normalized/${jarFile.name}.tmp")
-            tempFile.parentFile.mkdirs()
-            boolean fileChanged = false
-            def zipFile = new java.util.zip.ZipFile(jarFile)
-            def zipOut = new java.util.zip.ZipOutputStream(new java.io.BufferedOutputStream(new java.io.FileOutputStream(tempFile)))
+        def outputDir = layout.buildDirectory.dir('named-runtime-api/v2').get().asFile
+        outputDir.mkdirs()
+        namedRuntimeSources.each { jarFile ->
+            def zip = new java.util.zip.ZipFile(jarFile)
             try {
-                def entries = zipFile.entries()
-                while (entries.hasMoreElements()) {
-                    def entry = entries.nextElement()
-                    zipOut.putNextEntry(new java.util.zip.ZipEntry(entry.name))
-                    byte[] bytes = entry.isDirectory() ? new byte[0] : zipFile.getInputStream(entry).bytes
-                    if (!entry.isDirectory() && (entry.name.endsWith('.classtweaker') || entry.name.endsWith('.accesswidener'))) {
-                        String text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
-                        String normalized = text
-                                .replaceFirst(/(?m)^(classTweaker\s+v\d+\s+)official(\s*)$/, '$1named$2')
-                                .replaceFirst(/(?m)^(accessWidener\s+v\d+\s+)official(\s*)$/, '$1named$2')
-                        if (normalized != text) {
-                            bytes = normalized.getBytes(java.nio.charset.StandardCharsets.UTF_8)
-                            fileChanged = true
-                            patchedEntries++
-                        }
+                def changes = [:]
+                zip.entries().each { entry ->
+                    if (!entry.directory && (entry.name.endsWith('.classtweaker') || entry.name.endsWith('.accesswidener'))) {
+                        def original = zip.getInputStream(entry).getText('UTF-8')
+                        def normalized = original.replaceFirst(/(?m)^((?:classTweaker|accessWidener)\s+v\d+\s+)official(\s*)$/, '$1named$2')
+                        if (normalized != original) changes[entry.name] = normalized.getBytes('UTF-8')
                     }
-                    zipOut.write(bytes)
-                    zipOut.closeEntry()
                 }
-            } finally {
-                zipOut.close()
-                zipFile.close()
-            }
-            if (fileChanged) {
-                java.nio.file.Files.move(tempFile.toPath(), jarFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-                patchedFiles++
-            } else {
-                tempFile.delete()
-            }
+                def copy = namedRuntimeCopyFor(jarFile)
+                if (!copy.isFile()) {
+                    def temporary = new File(copy.parentFile, copy.name + ".tmp")
+                    def out = new java.util.zip.ZipOutputStream(new FileOutputStream(temporary))
+                    try {
+                        zip.entries().each { entry ->
+                            out.putNextEntry(new java.util.zip.ZipEntry(entry.name))
+                            if (!entry.directory) out.write(changes[entry.name] ?: zip.getInputStream(entry).bytes)
+                            out.closeEntry()
+                        }
+                    } finally { out.close() }
+                    java.nio.file.Files.move(temporary.toPath(), copy.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+                }
+            } finally { zip.close() }
         }
-        logger.lifecycle("Normalized ${patchedEntries} Fabric API tweaker entries in ${patchedFiles} jars for named dev runtime.")
+        logger.lifecycle("Prepared ${namedRuntimeCopies.size()} isolated named-runtime API copies.")
     }
 }
 
-tasks.matching { task -> task.name in ['runServer', 'runClient', 'runGameTest', 'runClientGameTest'] }.configureEach {
-    dependsOn('normalizeFabricApiTweakersForNamedDevRuntime')
+afterEvaluate {
+    tasks.withType(net.fabricmc.loom.task.RunGameTask).all { runTask ->
+        dependsOn('normalizeFabricApiTweakersForNamedDevRuntime')
+        def classpathProducers = classpath.buildDependencies.getDependencies(runTask).toList()
+        dependsOn(classpathProducers)
+        def originals = classpath.files.toList()
+        def copies = originals.collect { file ->
+            if (file.absolutePath.contains('/net.fabricmc.fabric-api/') && file.name.endsWith('.jar')) {
+                namedRuntimeSources.add(file)
+                return namedRuntimeCopyFor(file)
+            }
+            return file
+        }
+        setClasspath(files(copies))
+    }
 }
 
 java {

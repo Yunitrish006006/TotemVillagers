@@ -91,7 +91,7 @@ public final class VillageUtilityPoolElement extends StructurePoolElement {
         StructureTemplate.StructureBlockInfo info = new StructureTemplate.StructureBlockInfo(position,
                 Blocks.JIGSAW.defaultBlockState().setValue(JigsawBlock.ORIENTATION,
                         FrontAndTop.fromFrontAndTop(Direction.DOWN, Direction.SOUTH)), defaultJigsawNbt);
-        return List.of(StructureTemplate.JigsawBlockInfo.of(info));
+        return List.of(StructureTemplate.JigsawBlockInfo.parse(info));
     }
 
     @Override

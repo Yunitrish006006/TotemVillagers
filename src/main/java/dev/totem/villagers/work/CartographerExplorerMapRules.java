@@ -24,15 +24,15 @@ public final class CartographerExplorerMapRules {
                     "filled_map.village_plains", 8, 5),
             definition("desert_village", 2, StructureTags.ON_DESERT_VILLAGE_MAPS, "minecraft:desert_village",
                     "filled_map.village_desert", 8, 5),
-            definition("jungle_temple", 2, StructureTags.ON_JUNGLE_EXPLORER_MAPS, "minecraft:jungle_temple",
+            definition("jungle_temple", 2, StructureTags.ON_JUNGLE_PYRAMID_MAPS, "minecraft:jungle_temple",
                     "filled_map.explorer_jungle", 8, 5),
-            definition("swamp_hut", 2, StructureTags.ON_SWAMP_EXPLORER_MAPS, "minecraft:swamp_hut",
+            definition("swamp_hut", 2, StructureTags.ON_SWAMP_HUT_MAPS, "minecraft:swamp_hut",
                     "filled_map.explorer_swamp", 8, 5),
-            definition("ocean_monument", 3, StructureTags.ON_OCEAN_EXPLORER_MAPS, "minecraft:monument",
+            definition("ocean_monument", 3, StructureTags.ON_OCEAN_MONUMENT_MAPS, "minecraft:monument",
                     "filled_map.monument", 13, 10),
-            definition("trial_chambers", 3, StructureTags.ON_TRIAL_CHAMBERS_MAPS, "minecraft:trial_chambers",
+            definition("trial_chambers", 3, StructureTags.ON_BURIED_TRIAL_CHAMBERS_MAPS, "minecraft:trial_chambers",
                     "filled_map.trial_chambers", 12, 10),
-            definition("woodland_mansion", 5, StructureTags.ON_WOODLAND_EXPLORER_MAPS, "minecraft:mansion",
+            definition("woodland_mansion", 5, StructureTags.ON_WOODLAND_MANSION_MAPS, "minecraft:mansion",
                     "filled_map.mansion", 14, 30)
     );
 

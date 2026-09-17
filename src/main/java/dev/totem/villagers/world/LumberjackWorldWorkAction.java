@@ -8,6 +8,7 @@ import dev.totem.villagers.worker.WorkZone;
 import dev.totem.villagers.worker.WorkerAssignmentSavedData;
 import dev.totem.villagers.worldgen.GeneratedVillageSavedData;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
@@ -118,7 +119,7 @@ public final class LumberjackWorldWorkAction {
             reservation.rollback();
             return false;
         }
-        lumberjack.swing(InteractionHand.MAIN_HAND);
+        lumberjack.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
         lumberjack.playWorkSound();
         return true;
     }

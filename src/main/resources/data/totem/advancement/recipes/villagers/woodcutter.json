@@ -10,7 +10,7 @@
     },
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
-      "conditions": { "recipe": "totem:woodcutter" }
+      "conditions": { "recipes": "totem:woodcutter" }
     }
   },
   "requirements": [["has_materials", "has_the_recipe"]],

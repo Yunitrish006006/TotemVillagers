@@ -10,7 +10,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 /** Captures the complete production Mangrove-village layout from a stable aerial camera. */
 @SuppressWarnings("UnstableApiUsage")
@@ -54,7 +54,7 @@ public final class MangroveVillageClientGameTest implements FabricClientGameTest
             // showcase image, then wait once more for the nearer camera's
             // complete five-chunk render radius.
             context.waitTicks(130);
-            singleplayer.getClientLevel().waitForChunksRender();
+            singleplayer.getConnection().waitForChunksRender();
             context.runOnClient(client -> {
                 if (client.player == null) {
                     throw new AssertionError("Mangrove-village showcase player was unavailable");
@@ -68,7 +68,7 @@ public final class MangroveVillageClientGameTest implements FabricClientGameTest
                 client.player.xRotO = client.player.getXRot();
             });
             context.waitTicks(4);
-            context.getInput().pressKey(GLFW.GLFW_KEY_F1);
+            context.getInput().pressKey(InputConstants.KEY_F1);
             context.waitTicks(2);
             context.takeScreenshot("totem-villagers-mangrove-village-natural-residences");
             context.runOnClient(client -> {
@@ -84,9 +84,9 @@ public final class MangroveVillageClientGameTest implements FabricClientGameTest
                 client.player.xRotO = client.player.getXRot();
             });
             context.waitTicks(6);
-            singleplayer.getClientLevel().waitForChunksRender();
+            singleplayer.getConnection().waitForChunksRender();
             context.takeScreenshot("totem-villagers-mangrove-village-natural-plan");
-            context.getInput().pressKey(GLFW.GLFW_KEY_F1);
+            context.getInput().pressKey(InputConstants.KEY_F1);
             context.waitTicks(2);
         }
     }

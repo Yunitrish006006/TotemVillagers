@@ -1,8 +1,8 @@
 # Totem Villagers
 
 Totem Villagers is a standalone Fabric module that makes villager sell stock
-the result of observable, server-authoritative work. It targets Minecraft 26.2
-with Java 25 and requires TotemCore 0.6.0.
+the result of observable, server-authoritative work. It targets Minecraft 26.3
+with Java 25 and requires TotemCore >=0.7.22 <0.8.0.
 
 Work-backed trading is enabled by default on each world. Sell-side offers
 require stock made by a validated work order; legacy vanilla stock is never

@@ -28,7 +28,7 @@ public final class VillagerItemUseClientGameTest implements FabricClientGameTest
             summon(singleplayer, 0.5D);
             summon(singleplayer, 3.0D);
             context.waitTicks(4);
-            singleplayer.getClientLevel().waitForChunksRender();
+            singleplayer.getConnection().waitForChunksRender();
             context.runOnClient(client -> {
                 if (client.player == null) {
                     throw new AssertionError("Item-use showcase player was unavailable");

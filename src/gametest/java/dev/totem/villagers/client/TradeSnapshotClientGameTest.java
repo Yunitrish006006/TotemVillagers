@@ -34,7 +34,7 @@ public final class TradeSnapshotClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
-            singleplayer.getClientLevel().waitForChunksRender();
+            singleplayer.getConnection().waitForChunksRender();
             context.setScreen(() -> {
                 Minecraft client = Minecraft.getInstance();
                 require(client.player != null, "Client test player was unavailable");

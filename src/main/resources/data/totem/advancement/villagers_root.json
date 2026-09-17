@@ -3,7 +3,7 @@
   "criteria": {
     "crafted_composter": {
       "conditions": {
-        "recipe_id": "minecraft:composter"
+        "recipes": "minecraft:composter"
       },
       "trigger": "minecraft:recipe_crafted"
     }

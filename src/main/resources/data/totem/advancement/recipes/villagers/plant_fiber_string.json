@@ -7,7 +7,7 @@
     },
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
-      "conditions": { "recipe": "totem:plant_fiber_string" }
+      "conditions": { "recipes": "totem:plant_fiber_string" }
     }
   },
   "requirements": [["has_plant_fiber", "has_the_recipe"]],

@@ -1,0 +1,23 @@
+{
+  "version": "0.1.38",
+  "java": 25,
+  "minecraft": "26.3",
+  "artifact": "totem-villagers-0.1.38.jar",
+  "sha512": "6a81bfafa6eaed7c2b7877ad5ca456e9ee1b18e736bf4e61b9daeafdfd5dccc814c353e3158d2b4e78cdf008ed6e22d340b152f3771cce913121f439e8b43496",
+  "core_version": "0.7.22",
+  "core_source_commit": "58deabdd4a81bc751679876f202a3fa062729c58",
+  "core_artifact_sha512": "35e4382fef9b5c5e68db3e67c887391256bb13fc7216c4e7f3d7a42242565e3a5c51d20e8f94671274132d89698e21b81f8e1242301d9c8994c328339b239fcd",
+  "remnant_version": "0.2.26",
+  "remnant_source_commit": "5cbf0dde947862c5ebf9bb81cee47c8d4b3a9648",
+  "remnant_artifact_sha512": "8f7746543ef2d796045360aabc2345d628c3bf96e63a8985f03a26b7d1a6403b31c48a1d9a5bbda499ba676245000a2d57435c7746acb77222b977c6797e42d9",
+  "local_unit_report_totals": {
+    "tests": 72,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "local_unit_report_files": 34,
+  "local_server_gametests_passed": 125,
+  "local_build_log": "/tmp/TotemVillagers-263-build.log",
+  "validation_scope": "Local working-tree evidence only. Referenced Java 25 / Minecraft 26.3 build log reports success; available unit XML reports contain no failures or errors. SHA512 values were computed from current local versioned JARs. Dependency source commits are intended release pins, not a claim that these reports independently bind the tested bytes to those commits or JARs. Exact-source remote Build, all required runtime gates and publisher read-back remain pending."
+}

@@ -115,7 +115,7 @@ public final class GuardConstructionGameTest {
         // structure while retaining work range without pathfinding.
         Villager guard = spawnVillager(helper, new BlockPos(7, 2, 7));
         guard.setNoGravity(true);
-        guard.setInvulnerable(true);
+        guard.setPermanentlyInvulnerable(true);
         setGuard(guard);
         VillagerNutrition.setFoodLevel(guard, 20);
         clearIronGolemPad(helper, pad);

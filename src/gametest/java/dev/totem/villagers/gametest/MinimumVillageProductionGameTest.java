@@ -179,7 +179,7 @@ public final class MinimumVillageProductionGameTest {
                     "Miner could not mine the prepared stone face");
             require(helper, new LumberjackWorldWorkAction().complete(level, lumberjack, lumberyard, treeBase, LUMBERJACK_LOGS,
                     lumberjackOrder, lumberjackInventory), "Lumberjack could not harvest the prepared mature tree");
-            require(helper, farmer.swinging && miner.swinging && lumberjack.swinging,
+            require(helper, farmer.isSwinging() && miner.isSwinging() && lumberjack.isSwinging(),
                     "Successful resource work did not trigger synchronized hand animations");
 
             require(helper, count(farmerInventory, Items.WHEAT) == 1

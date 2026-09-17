@@ -19,6 +19,7 @@ import dev.totem.villagers.worker.WorkerAssignmentSavedData;
 import dev.totem.villagers.world.WorldWorkPermissions;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
@@ -192,7 +193,7 @@ public final class GuardConstructionRuntime {
         if (!post.level().setBlock(target, block.defaultBlockState(), 3)) {
             return cancel(village, order, post);
         }
-        guard.swing(InteractionHand.MAIN_HAND);
+        guard.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
         guard.playWorkSound();
         int nextStep = construction.placedSteps() + 1;
         if (nextStep < order.placements().size()) {

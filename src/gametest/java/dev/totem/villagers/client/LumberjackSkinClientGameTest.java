@@ -26,7 +26,7 @@ public final class LumberjackSkinClientGameTest implements FabricClientGameTest 
             singleplayer.getServer().runCommand("execute in minecraft:overworld run summon minecraft:villager 0.5 4.0 3.5 "
                     + "{NoAI:1b,NoGravity:1b,Rotation:[180.0f,0.0f],VillagerData:{type:\"minecraft:plains\",profession:\"totem:lumberjack\",level:1}}");
             context.waitTicks(20);
-            singleplayer.getClientLevel().waitForChunksRender();
+            singleplayer.getConnection().waitForChunksRender();
             context.runOnClient(client -> {
                 if (client.player == null || client.getResourceManager().getResource(TEXTURE).isEmpty()) {
                     throw new AssertionError("Dedicated Lumberjack profession texture was unavailable");
@@ -41,9 +41,11 @@ public final class LumberjackSkinClientGameTest implements FabricClientGameTest 
                 Villager lumberjack = client.level.getEntitiesOfClass(Villager.class,
                                 new AABB(-1.0D, 3.0D, 2.0D, 2.0D, 7.0D, 5.0D)).stream()
                         .findFirst().orElseThrow(() -> new AssertionError("Lumberjack showcase entity was unavailable"));
-                lumberjack.swingingArm = InteractionHand.MAIN_HAND;
-                lumberjack.oAttackAnim = 0.45F;
-                lumberjack.attackAnim = 0.55F;
+                lumberjack.swing(InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT, false);
+                var swing = ((dev.totem.villagers.gametest.mixin.client.LivingEntitySwingAccessor) lumberjack).totemVillagers$getSwingState();
+                swing.tick();
+                swing.tick();
+                swing.tick();
             });
             context.waitTicks(2);
             context.takeScreenshot("totem-villagers-lumberjack-dedicated-skin");
