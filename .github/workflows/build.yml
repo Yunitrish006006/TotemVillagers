@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant \
-            -PtotemCoreJar="$CORE_JAR" jar --no-daemon --stacktrace
+            -PtotemCoreJar="$CORE_JAR" remapJar --no-daemon --stacktrace
           remnant_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
           echo "Resolved TotemRemnant version: ${remnant_version}"
           ls -la .lockstep/TotemRemnant/build/libs
