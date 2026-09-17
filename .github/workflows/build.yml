@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemRemnant
-          ref: 728db4a
+          ref: 728db4adbe16fa13d1f99da3f2309b2ae5f7613a
           path: .lockstep/TotemRemnant
           persist-credentials: false
 
@@ -100,7 +100,7 @@ jobs:
           sha="$(sha512sum "build/libs/${artifact}" | awk '{print $1}')"
           test "$sha" = "$(jq -er .sha512 ".github/staging/release-validation-${version}.json")"
           dependency_source="$(git -C .lockstep/TotemRemnant rev-parse HEAD)"
-          test "$dependency_source" = 728db4a
+          test "$dependency_source" = 728db4adbe16fa13d1f99da3f2309b2ae5f7613a
           dependency_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
           test "$dependency_version" = 0.2.27
           dependency_sha="$(sha512sum .lockstep/TotemRemnant/build/libs/totem-remnant-0.2.27.jar | awk '{print $1}')"

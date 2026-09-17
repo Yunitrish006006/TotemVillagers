@@ -8,7 +8,7 @@
   "core_source_commit": "424b90dc3929caa8c1afcfca7e63c50a64bde669",
   "core_artifact_sha512": "c3d2f88252ee23500d91f7d49a742f47ae981f25acf1e3cdfcf76c81aa36319943ea92f7aa0a7caf1685d89cb765a1e83ac6a0ee1f1af00cec9ea071cdbe923d",
   "remnant_version": "0.2.27",
-  "remnant_source_commit": "728db4a",
+  "remnant_source_commit": "728db4adbe16fa13d1f99da3f2309b2ae5f7613a",
   "remnant_artifact_sha512": "931780f0ed7428b0609d574faa2dd771ff8666c7f316b65381b63d864644bf029bad1edb1cdaa28ca801bc79f92d8dac0a065f3ba9750b48a2dff2f6092fe961",
   "validation_scope": "Local Java 25 versioned JAR build passed; exact-source CI, runtime gates and Modrinth read-back remain mandatory.",
   "independent_review": "Pending independent release review and exact-source CI evidence."
