@@ -61,6 +61,8 @@ jobs:
           ./.lockstep/TotemRemnant/gradlew -p .lockstep/TotemRemnant \
             -PtotemCoreJar="$CORE_JAR" jar --no-daemon --stacktrace
           remnant_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemRemnant/gradle.properties)"
+          echo "Resolved TotemRemnant version: ${remnant_version}"
+          ls -la .lockstep/TotemRemnant/build/libs
           test "$remnant_version" = '0.2.27'
           remnant_jar="$GITHUB_WORKSPACE/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.27.jar"
           test -n "$remnant_jar"
