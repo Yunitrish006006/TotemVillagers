@@ -11,7 +11,7 @@ concurrency: {group: 'modrinth-${{ github.workflow }}-${{ github.ref }}', cancel
 env:
   MODULE_ID: totem-villagers
   CORE_REF: 424b90dc3929caa8c1afcfca7e63c50a64bde669
-  REMNANT_REF: 5cbf0dde947862c5ebf9bb81cee47c8d4b3a9648
+  REMNANT_REF: 728db4a
 jobs:
   publish:
     runs-on: ubuntu-latest
