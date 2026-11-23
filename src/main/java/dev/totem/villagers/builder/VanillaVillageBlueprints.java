@@ -96,6 +96,17 @@ public final class VanillaVillageBlueprints {
 
     /** NBT is deliberately excluded: a built chest is empty and no template entity or loot table is copied. */
     public record BlueprintBlock(BlockPos position, BlockState state, String materialItemId) {
+        public boolean installed(BlockState actual) {
+            if (!actual.is(state.getBlock())) return false;
+            if (state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock) {
+                actual = actual.setValue(BlockStateProperties.OPEN, state.getValue(BlockStateProperties.OPEN))
+                        .setValue(BlockStateProperties.POWERED, state.getValue(BlockStateProperties.POWERED));
+            } else if (state.getBlock() instanceof net.minecraft.world.level.block.BedBlock) {
+                actual = actual.setValue(BlockStateProperties.OCCUPIED, state.getValue(BlockStateProperties.OCCUPIED));
+            }
+            return actual.equals(state);
+        }
+
         public boolean hasPlaceableMaterial() {
             return !state.is(Blocks.JIGSAW)
                     && !state.is(Blocks.STRUCTURE_BLOCK)

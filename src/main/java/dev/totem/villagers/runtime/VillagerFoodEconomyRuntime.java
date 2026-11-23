@@ -15,6 +15,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.MerchantOffer;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -32,7 +34,7 @@ public final class VillagerFoodEconomyRuntime {
     private static final double PURCHASE_REACH_SQUARED = 16.0D;
     private static final int INTERNAL_FOOD_PRICE = 1;
     /** One emerald buys a persistent five-bread-equivalent ration pack. */
-    private static final int INTERNAL_FOOD_NUTRITION = 25;
+    static final int INTERNAL_FOOD_NUTRITION = 25;
     private static final int SELLER_RESERVE_NUTRITION = VillagerNutrition.MAX_FOOD_LEVEL;
     /** A worker may carry its own reserve plus at most two pre-purchased order-financing rations. */
     private static final int WORK_ORDER_FOOD_RESERVE_CAP = SELLER_RESERVE_NUTRITION
@@ -42,6 +44,7 @@ public final class VillagerFoodEconomyRuntime {
     }
 
     public static void register() {
+        ButcherRationOrders.register();
         ServerTickEvents.END_SERVER_TICK.register(VillagerFoodEconomyRuntime::tick);
     }
 
@@ -85,38 +88,60 @@ public final class VillagerFoodEconomyRuntime {
                 if (!foodMarket) {
                     continue;
                 }
-                VillagerWorkInventory ownInventory = inventories.inventory(villager.getUUID());
-                if (VillagerNutrition.isHungry(villager)) {
-                    tryConsumeOwnStoredFood(villager, ownInventory);
-                }
-                if (needsFoodRestock(villager, ownInventory) && !inDanger(villager)
-                        && !villager.isSleeping() && !level.isRaided(villager.blockPosition())) {
-                    seekAndBuyFood(level, villager, inventories);
-                }
+                marketTurn(level, villager, inventories, level.getGameTime());
             }
         }
     }
 
-    private static void seekAndBuyFood(ServerLevel level, Villager buyer, VillagerWorkInventorySavedData inventories) {
+    static void marketTurn(ServerLevel level, Villager villager, VillagerWorkInventorySavedData inventories, long now) {
+        VillagerWorkInventory ownInventory = inventories.inventory(villager.getUUID());
+        if (VillagerNutrition.isHungry(villager)) {
+            tryConsumeOwnStoredFood(villager, ownInventory);
+        }
+        if (!VillagerNutrition.isHungry(villager)) VillagerHeadStatus.clear(villager,
+                VillagerHeadStatus.Kind.FOOD, VillagerHeadStatus.Kind.BUYING_FOOD);
+        if (!needsFoodRestock(villager, ownInventory)) {
+            ButcherRationOrders.clear(villager);
+        } else if (inDanger(villager) || villager.isSleeping() || villager.isTrading() || level.isRaided(villager.blockPosition())) {
+            ButcherRationOrders.pause(villager);
+        } else seekAndBuyFood(level, villager, inventories, now);
+    }
+
+    static void seekAndBuyFood(ServerLevel level, Villager buyer, VillagerWorkInventorySavedData inventories, long now) {
         VillagerWorkInventory buyerInventory = inventories.inventory(buyer.getUUID());
-        Optional<FoodSeller> seller = LoadedVillagerCache.loaded(level).stream()
-                .filter(candidate -> candidate.isAlive() && !candidate.isBaby() && candidate != buyer
-                        && isFoodProducer(candidate)
-                        && candidate.distanceToSqr(buyer) <= (double) SEARCH_RADIUS * SEARCH_RADIUS)
-                .map(producer -> foodForSale(inventories.inventory(producer.getUUID()))
-                        .map(food -> new FoodSeller(producer, inventories.inventory(producer.getUUID()), food)))
-                .flatMap(Optional::stream)
-                .filter(candidate -> buyer.getNavigation().createPath(candidate.producer().blockPosition(), 0) != null)
-                .min(java.util.Comparator.comparingDouble(candidate -> buyer.distanceToSqr(candidate.producer())));
-        if (seller.isEmpty()) {
-            return;
+        var sellers = LoadedVillagerCache.loaded(level).stream()
+                .filter(v -> v != buyer && v.isAlive() && !v.isBaby() && isFoodProducer(v)
+                        && v.distanceToSqr(buyer) <= (double)SEARCH_RADIUS * SEARCH_RADIUS)
+                .sorted(java.util.Comparator.comparingDouble(buyer::distanceToSqr)).toList();
+        boolean funded = buyerInventory.countMatchingItem(new ItemStack(Items.EMERALD)) >= INTERNAL_FOOD_PRICE;
+        if (funded || VillagerNutrition.isHungry(buyer)) {
+            for (var producer : sellers) {
+                var stock = inventories.inventory(producer.getUUID());
+                var pack = foodForSale(stock).orElse(null);
+                if (pack == null) continue;
+                var offer = new FoodSeller(producer, stock, pack);
+                if (inReach(buyer, producer)) {
+                    if (!tryPurchaseFromFoodProducer(level, buyer, offer, inventories)) continue;
+                    ButcherRationOrders.clear(buyer);
+                    VillagerHeadStatus.clear(buyer, VillagerHeadStatus.Kind.FOOD, VillagerHeadStatus.Kind.BUYING_FOOD);
+                    return;
+                }
+                if (funded) {
+                    var projection = inventories.copyAccounts(List.of(buyer.getUUID(), producer.getUUID()));
+                    var wallet = projection.inventory(buyer.getUUID());
+                    if (!transferFood(new FoodSeller(producer, projection.inventory(producer.getUUID()), pack), wallet, wallet)) continue;
+                } else if (findSponsor(level, buyer, producer, inventories) == null) continue;
+                var path = buyer.getNavigation().createPath(producer, 0);
+                if (path != null && path.canReach() && buyer.getNavigation().moveTo(path, .5)) {
+                    ButcherRationOrders.clear(buyer);
+                    VillagerHeadStatus.report(buyer, VillagerHeadStatus.Kind.BUYING_FOOD);
+                    return;
+                }
+            }
         }
-        FoodSeller foodSeller = seller.orElseThrow();
-        if (buyer.distanceToSqr(foodSeller.producer()) > PURCHASE_REACH_SQUARED) {
-            buyer.getNavigation().moveTo(foodSeller.producer().getX(), foodSeller.producer().getY(), foodSeller.producer().getZ(), .5D);
-            return;
-        }
-        tryPurchaseFromFoodProducer(level, buyer, foodSeller, inventories);
+        if (funded) ButcherRationOrders.observe(level, buyer, inventories, now);
+        else ButcherRationOrders.clear(buyer);
+        if (VillagerNutrition.isHungry(buyer)) VillagerHeadStatus.report(buyer, VillagerHeadStatus.Kind.FOOD);
     }
 
     /**
@@ -176,7 +201,7 @@ public final class VillagerFoodEconomyRuntime {
                 || buyer.distanceToSqr(producer) > (double) SEARCH_RADIUS * SEARCH_RADIUS) {
             return false;
         }
-        if (buyer.distanceToSqr(producer) > PURCHASE_REACH_SQUARED) {
+        if (!inReach(buyer, producer)) {
             buyer.getNavigation().moveTo(producer, .5D);
             return false;
         }
@@ -189,7 +214,7 @@ public final class VillagerFoodEconomyRuntime {
             return false;
         }
         int carried = storedNutrition(buyerInventory);
-        int delivered = VillagerNutrition.nutrition(seller.food()) * seller.food().getCount();
+        int delivered = nutritionOf(seller.food());
         return carried + delivered <= WORK_ORDER_FOOD_RESERVE_CAP
                 && exchangeFood(buyer, seller, buyerInventory);
     }
@@ -199,7 +224,7 @@ public final class VillagerFoodEconomyRuntime {
         Villager producer = seller.producer();
         VillagerWorkInventory buyerInventory = inventories.inventory(buyer.getUUID());
         if (!canBuyFood(buyer) || !needsFoodRestock(buyer, buyerInventory) || !isFoodProducer(producer)
-                || buyer == producer || buyer.distanceToSqr(producer) > PURCHASE_REACH_SQUARED) {
+                || buyer == producer || !inReach(buyer, producer)) {
             return false;
         }
         if (buyerInventory.countMatchingItem(new ItemStack(Items.EMERALD)) >= INTERNAL_FOOD_PRICE) {
@@ -211,24 +236,7 @@ public final class VillagerFoodEconomyRuntime {
 
     private static boolean exchangeFood(Villager buyer, FoodSeller seller,
                                         VillagerWorkInventory buyerInventory) {
-        ItemStack food = seller.food().copy();
-        VillagerWorkInventory producerInventory = seller.inventory();
-        ItemStack payment = new ItemStack(Items.EMERALD, INTERNAL_FOOD_PRICE);
-        if (VillagerNutrition.nutrition(food) < 1 || !buyerInventory.canInsertExact(food)
-                || !producerInventory.canInsertExact(payment)
-                || buyerInventory.takeExactMatchingItem(payment).isEmpty()) {
-            return false;
-        }
-        ItemStack delivered = producerInventory.takeExactMatchingItem(food).orElse(null);
-        if (delivered == null) {
-            buyerInventory.insertExact(payment);
-            return false;
-        }
-        if (!buyerInventory.insertExact(delivered) || !producerInventory.insertExact(payment)) {
-            throw new IllegalStateException("Physical food trade changed during same-tick commit");
-        }
-        tryConsumeOwnStoredFood(buyer, buyerInventory);
-        return true;
+        return payForFood(buyer, seller, buyerInventory, buyerInventory);
     }
 
     /** The richest nearby adult funds one meal only when the intended eater is already hungry and insolvent. */
@@ -236,7 +244,20 @@ public final class VillagerFoodEconomyRuntime {
                                                  VillagerWorkInventory buyerInventory,
                                                  VillagerWorkInventorySavedData inventories) {
         Villager producer = seller.producer();
-        Villager sponsor = LoadedVillagerCache.loaded(level).stream()
+        Villager sponsor = findSponsor(level, buyer, producer, inventories);
+        if (sponsor == null) {
+            return false;
+        }
+        if (!inReach(sponsor, producer)) {
+            sponsor.getNavigation().moveTo(producer, .5D);
+            return false;
+        }
+        VillagerWorkInventory sponsorInventory = inventories.inventory(sponsor.getUUID());
+        return payForFood(buyer, seller, buyerInventory, sponsorInventory);
+    }
+
+    private static Villager findSponsor(ServerLevel level, Villager buyer, Villager producer, VillagerWorkInventorySavedData inventories) {
+        return LoadedVillagerCache.loaded(level).stream()
                 .filter(candidate -> candidate.isAlive() && !candidate.isBaby()
                         && candidate != buyer && candidate != producer
                         && candidate.distanceToSqr(buyer) <= (double) SEARCH_RADIUS * SEARCH_RADIUS
@@ -246,37 +267,42 @@ public final class VillagerFoodEconomyRuntime {
                 .max(java.util.Comparator.comparingInt(candidate -> inventories.inventory(candidate.getUUID())
                         .countMatchingItem(new ItemStack(Items.EMERALD))))
                 .orElse(null);
-        if (sponsor == null) {
-            return false;
-        }
-        if (sponsor.distanceToSqr(producer) > PURCHASE_REACH_SQUARED) {
-            sponsor.getNavigation().moveTo(producer, .5D);
-            return false;
-        }
-        VillagerWorkInventory sponsorInventory = inventories.inventory(sponsor.getUUID());
-        VillagerWorkInventory producerInventory = seller.inventory();
-        ItemStack payment = new ItemStack(Items.EMERALD, INTERNAL_FOOD_PRICE);
-        ItemStack food = seller.food().copy();
-        if (VillagerNutrition.nutrition(food) < 1 || !buyerInventory.canInsertExact(food)
-                || !producerInventory.canInsertExact(payment)
-                || sponsorInventory.takeExactMatchingItem(payment).isEmpty()) {
-            return false;
-        }
-        ItemStack delivered = producerInventory.takeExactMatchingItem(food).orElse(null);
-        if (delivered == null) {
-            sponsorInventory.insertExact(payment);
-            return false;
-        }
-        if (!buyerInventory.insertExact(delivered)) {
-            producerInventory.insertExact(delivered);
-            sponsorInventory.insertExact(payment);
-            return false;
-        }
-        if (!producerInventory.insertExact(payment)) {
-            throw new IllegalStateException("Sponsored food payment capacity changed during same-tick commit");
-        }
+    }
+
+    private static boolean payForFood(Villager buyer, FoodSeller seller, VillagerWorkInventory buyerInventory,
+                                      VillagerWorkInventory payer) {
+        if (!transferFood(seller, buyerInventory, payer)) return false;
         tryConsumeOwnStoredFood(buyer, buyerInventory);
         return true;
+    }
+
+    private static boolean inReach(Villager buyer, Villager seller) {
+        return buyer.distanceToSqr(seller) <= PURCHASE_REACH_SQUARED && buyer.hasLineOfSight(seller);
+    }
+
+    private static boolean transferFood(FoodSeller seller, VillagerWorkInventory buyerInventory, VillagerWorkInventory payer) {
+        ItemStack emerald = new ItemStack(Items.EMERALD, INTERNAL_FOOD_PRICE);
+        var payment = payer.reserveExactMatchingItem(emerald).orElse(null);
+        if (payment == null) return false;
+        var goods = seller.inventory().reserveExactMatching(seller.food()).orElse(null);
+        if (goods == null) {
+            payment.rollback();
+            return false;
+        }
+        if (!seller.inventory().canInsertExact(emerald) || !buyerInventory.insertAllExact(seller.food())) {
+            goods.rollback();
+            payment.rollback();
+            return false;
+        }
+        if (!goods.commitWithReturn(emerald)) {
+            throw new IllegalStateException("Seller capacity changed during food exchange");
+        }
+        payment.commit();
+        return true;
+    }
+
+    private static int nutritionOf(List<ItemStack> food) {
+        return food.stream().mapToInt(stack -> VillagerNutrition.nutrition(stack) * stack.getCount()).sum();
     }
 
     private static int storedNutrition(VillagerWorkInventory inventory) {
@@ -290,14 +316,47 @@ public final class VillagerFoodEconomyRuntime {
                 .map(ItemStack::copy);
     }
 
-    private static Optional<ItemStack> foodForSale(VillagerWorkInventory inventory) {
-        int totalNutrition = inventory.snapshot().stream()
-                .mapToInt(stack -> VillagerNutrition.nutrition(stack) * stack.getCount()).sum();
-        return inventory.snapshot().stream()
+    static Optional<List<ItemStack>> foodForSale(VillagerWorkInventory inventory) {
+        List<ItemStack> stock = inventory.snapshot();
+        int totalNutrition = nutritionOf(stock);
+        int budget = totalNutrition - SELLER_RESERVE_NUTRITION;
+        if (budget < INTERNAL_FOOD_NUTRITION) return Optional.empty();
+        var single = stock.stream()
                 .filter(stack -> VillagerNutrition.nutrition(stack) > 0)
                 .map(stack -> transferableFood(stack, totalNutrition))
                 .filter(stack -> !stack.isEmpty())
                 .max(java.util.Comparator.comparingInt(VillagerNutrition::nutrition));
+        if (single.isPresent()) return Optional.of(List.of(single.get()));
+
+        // Only subtotals below one ration need extending. Keep the cheapest complete pack within the reserve.
+        int target = INTERNAL_FOOD_NUTRITION;
+        List<List<ItemStack>> partial = new ArrayList<>(java.util.Collections.nCopies(target, null));
+        partial.set(0, List.of());
+        int best = Integer.MAX_VALUE;
+        List<ItemStack> pack = null;
+        for (ItemStack stack : stock) {
+            int points = VillagerNutrition.nutrition(stack);
+            if (points <= 0) continue;
+            for (int subtotal = target - 1; subtotal >= 0; subtotal--) {
+                var prefix = partial.get(subtotal);
+                if (prefix == null) continue;
+                int limit = Math.min(stack.getCount(), divideRoundUp(target - subtotal, points));
+                for (int count = 1; count <= limit; count++) {
+                    int value = subtotal + count * points;
+                    if (value > budget || value >= best || (value < target && partial.get(value) != null)) continue;
+                    List<ItemStack> next = new ArrayList<>(prefix);
+                    next.add(stack.copyWithCount(count));
+                    if (value < target) {
+                        partial.set(value, next);
+                    } else {
+                        best = value;
+                        pack = next;
+                        if (value == target) return Optional.of(pack);
+                    }
+                }
+            }
+        }
+        return Optional.ofNullable(pack);
     }
 
     private static ItemStack transferableFood(ItemStack available, int totalNutrition) {
@@ -320,7 +379,7 @@ public final class VillagerFoodEconomyRuntime {
         return "minecraft:farmer".equals(professionId(villager));
     }
 
-    private static boolean isFoodProducer(Villager villager) {
+    static boolean isFoodProducer(Villager villager) {
         return switch (professionId(villager)) {
             case "minecraft:farmer", "minecraft:fisherman", "minecraft:butcher" -> true;
             default -> false;
@@ -344,6 +403,6 @@ public final class VillagerFoodEconomyRuntime {
                 || villager.getBrain().hasMemoryValue(MemoryModuleType.AVOID_TARGET);
     }
 
-    private record FoodSeller(Villager producer, VillagerWorkInventory inventory, ItemStack food) {
+    private record FoodSeller(Villager producer, VillagerWorkInventory inventory, List<ItemStack> food) {
     }
 }

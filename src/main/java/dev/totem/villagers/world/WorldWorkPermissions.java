@@ -31,6 +31,14 @@ public final class WorldWorkPermissions {
                 && CHECK.invoker().mayWork(level, villager, target);
     }
 
+    /** Household gathering and construction leave assigned plots and operator zones to their workers. */
+    public static boolean mayUseHouseholdLand(ServerLevel level, Villager villager, BlockPos target) {
+        return mayWork(level, villager, target)
+                && !dev.totem.villagers.worker.ProductionParcel.get(level.getServer()).heldByAnother(level, target, villager)
+                && !dev.totem.villagers.worker.WorkerAssignmentSavedData.forServer(level.getServer())
+                        .containsZoneCell(level.dimension().identifier().toString(), target);
+    }
+
     @FunctionalInterface
     public interface Check {
         boolean mayWork(ServerLevel level, Villager villager, BlockPos target);

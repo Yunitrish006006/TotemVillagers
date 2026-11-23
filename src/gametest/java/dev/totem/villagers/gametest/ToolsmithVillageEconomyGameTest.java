@@ -87,6 +87,15 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @GameTest(maxTicks = 40)
     public void toolsmithCutsPlantsCraftsLiveStringAndSuppliesFishingRod(GameTestHelper helper) {
+        verifyPlantFishingRodSupply(helper, true);
+    }
+
+    @GameTest(maxTicks = 40)
+    public void toolsmithGathersGrassByHandWhenVillageHasNoIron(GameTestHelper helper) {
+        verifyPlantFishingRodSupply(helper, false);
+    }
+
+    private void verifyPlantFishingRodSupply(GameTestHelper helper, boolean withIron) {
         var level = helper.getLevel();
         var server = level.getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
@@ -104,15 +113,15 @@ public final class ToolsmithVillageEconomyGameTest {
         try {
             VillagerNutrition.setFoodLevel(toolsmith, 20);
             VillagerNutrition.setFoodLevel(fisherman, 20);
-            require(helper, smithStock.insertAllExact(List.of(
-                            new ItemStack(Items.IRON_INGOT, 2), new ItemStack(Items.STICK, 3))),
+            require(helper, smithStock.insertExact(new ItemStack(Items.STICK, 3))
+                            && (!withIron || smithStock.insertExact(new ItemStack(Items.IRON_INGOT, 2))),
                     "Could not seed the Toolsmith's live shears and rod recipe materials");
             require(helper, fisherStock.insertExact(new ItemStack(Items.EMERALD, 8)),
                     "Could not seed the Fisherman's physical emerald payment");
             for (int index = 0; index < relativePlants.size(); index++) {
                 BlockPos plant = relativePlants.get(index);
                 helper.setBlock(plant.below(), Blocks.GRASS_BLOCK);
-                helper.setBlock(plant, index % 2 == 0 ? Blocks.SHORT_GRASS : Blocks.FERN);
+                helper.setBlock(plant, !withIron || index % 2 == 0 ? Blocks.SHORT_GRASS : Blocks.FERN);
             }
 
             for (int pass = 0; pass < 11; pass++) {
@@ -121,7 +130,8 @@ public final class ToolsmithVillageEconomyGameTest {
 
             ItemStack usedShears = smithStock.snapshot().stream().filter(stack -> stack.is(Items.SHEARS))
                     .findFirst().orElse(null);
-            require(helper, usedShears != null && usedShears.getDamageValue() == relativePlants.size(),
+            require(helper, withIron ? usedShears != null && usedShears.getDamageValue() == relativePlants.size()
+                            : usedShears == null,
                     "Toolsmith did not consume one real shears durability for every harvested plant");
             require(helper, relativePlants.stream().map(helper::absolutePos)
                             .allMatch(position -> level.getBlockState(position).isAir()),

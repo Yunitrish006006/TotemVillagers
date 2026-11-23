@@ -5,6 +5,13 @@
   "mixins": [
     "AbstractVillagerTradeStockMixin",
     "AbstractVillagerOffersAccessor",
+    "FurnaceFuelInvoker",
+    "HarvestFarmlandMixin",
+    "AssignProfessionFromJobSiteMixin",
+    "NaturalOakChunkMixin",
+    "NaturalOakFeatureMixin",
+    "NaturalStoneSurfaceMixin",
+    "PastureLootMixin",
     "MerchantMenuTraderAccessor",
     "StructureTemplateAccessor",
     "StructureTemplateManagerMixin",

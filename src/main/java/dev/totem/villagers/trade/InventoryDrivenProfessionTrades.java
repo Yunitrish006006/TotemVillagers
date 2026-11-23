@@ -175,7 +175,8 @@ public final class InventoryDrivenProfessionTrades {
         }
         ItemStack result = vanilla == null ? new ItemStack(item, order.output().count()) : vanilla.getResult().copy();
         int reserve = reservedCount(professionId, result);
-        return result.copyWithCount(Math.min(result.getMaxStackSize(), result.getCount() + reserve));
+        int stock = result.getCount() + reserve;
+        return stock <= result.getMaxStackSize() ? result.copyWithCount(stock) : ItemStack.EMPTY;
     }
 
     private static Map<StockVariantKey, WorkOrder> legalBaseOrders(

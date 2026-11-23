@@ -29,6 +29,22 @@ All commands require the Minecraft administrator permission.
 /totemvillagers guard-post unregister <village UUID>
 ```
 
+### Starting a household at the water's edge
+
+In enforced mode an unemployed adult with a remembered bed can work temporarily
+without a job site. Give the settlement a water source, clear permitted ground,
+and nearby timber or materials. With wheat seeds in its work inventory a
+resident can make a wooden hoe, till one waterside plot, sow and later harvest
+and replant it. Three harvested wheat make bread at the household crafting
+table. On the shore route, six grass clippings supply two strings for a rod.
+The resident casts from a dry bank, stores actual raw cod or salmon, and stops
+once its work inventory holds 20 nutrition. These jobs preserve its profession.
+
+A worker missing wood can gather a small straight oak recorded during terrain
+generation. Replacing any trunk block retires that tree from gathering. The
+fallback works only in loaded terrain near the worker's home or job site.
+Previously generated terrain remains usable with physical wood supplies.
+
 ### First playable loop: physical village economy
 
 1. A new world starts in `enforced` mode automatically; no setup command is
@@ -156,6 +172,15 @@ the running server's current player recipe, and six clippings supply the two
 strings for a fishing rod. Each clipping consumes one real shears durability;
 replacement shears use two physical iron ingots and the current player recipe.
 
+When a fishing-rod order needs string and the Toolsmith cannot obtain shears,
+it can instead buy a missing batch of up to three eligible leaf clippings from
+a nearby Lumberjack for one emerald, or gather short or tall grass by hand.
+Each grass plant supplies one fibre, including both halves of tall grass
+together. A completed tree harvest can retain one extra oak or mangrove leaf
+from its harvested canopy, up to six extra leaves of each type in stock.
+These ingredients use the same player-accessible string recipe. See the
+[autonomous village implementation plan](docs/autonomous-village-plan.md) for the later settlement stages.
+
 The vanilla Fisherman cod-bucket row is now real fishing work. Put an empty
 bucket in the Fisherman's personal work inventory and give it a reachable,
 loaded tagged water target near its Campfire. A completed fishing cycle uses
@@ -174,7 +199,11 @@ work has completed.
 
 A Farmer now needs a real usable hoe in personal inventory before harvesting.
 Each successful crop harvest consumes one durability point; when the tool
-breaks, crop work pauses until another hoe is obtained.
+breaks, an adult Farmer can make a replacement wooden hoe from physical wood.
+It uses a crafting table near its assigned Composter. If needed, the Farmer
+crafts and places a table on clear, permitted dirt or grass immediately beside
+the Composter. With vanilla recipes two logs supply both the table and hoe.
+A Farmer buying a missing log from a Lumberjack keeps one emerald for food.
 
 For a nearby core worker without its work tool, a Toolsmith autonomously buys
 one physical log from a Lumberjack for two emeralds and validates the world's
@@ -620,7 +649,9 @@ its carried ration contains at most 20 nutrition points, it may restock a
 five-bread-equivalent physical ration from a reachable Farmer, Fisherman or Butcher within 32 blocks
 for one physical emerald and keeps whatever it does not immediately eat. This
 internal market does not depend on the producer randomly rolling a player-facing
-food offer, and the producer preserves a 20-point emergency ration. With natural
+food offer, and the producer preserves a 20-point emergency ration. If a single
+stack cannot supply a whole ration, the seller can combine several foods for
+the same price while keeping that reserve. With natural
 regeneration enabled, 18+ food heals by the same
 timers and exhaustion cost as a player; at zero food, starvation damage follows
 the world's Peaceful/Easy/Normal/Hard health limits. While hungry the worker cancels and pauses every

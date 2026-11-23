@@ -221,6 +221,7 @@ public final class VillageWorldgenBootstrapRuntime {
             });
         }
         current = currentVillage(villages, current);
+        List<Villager> founders = residents.stream().filter(v -> VillagerCareerHistory.generatedIn(v, state)).toList();
         boolean populationFounded = false;
         if (isMangroveVillage(current) && !current.foundingPopulationSpawned()
                 && current.lumberjackZoneId().isPresent() && current.minerZoneId().isPresent()) {
@@ -228,13 +229,14 @@ public final class VillageWorldgenBootstrapRuntime {
             if (founded.isPresent()) {
                 villages.markFoundingPopulationSpawned(current.id());
                 current = currentVillage(villages, current);
+                founders = founded.get();
                 endowmentResidents = residents(level, current);
                 populationFounded = true;
             }
         }
         current = endowResidents(endowmentResidents, current, villages);
         if (resourceZoneCount(current) > initialResourceZoneCount || populationFounded) {
-            VillagerResourceWorkforceRuntime.allocateFoundingWorkforce(level.getServer());
+            VillagerResourceWorkforceRuntime.allocateFoundingWorkforce(level.getServer(), founders);
         }
     }
 
@@ -565,6 +567,7 @@ public final class VillageWorldgenBootstrapRuntime {
             }
             FoundingMine mine = foundingMine(level, village, furnace.orElseThrow(), direction).orElseThrow();
             if (placeFoundingMine(level, mine)) {
+                dev.totem.villagers.world.MinerFurnaceWorkstation.markGenerated(level, furnace.orElseThrow());
                 return Optional.of(mine.zone());
             }
         }
@@ -579,6 +582,20 @@ public final class VillageWorldgenBootstrapRuntime {
             return Optional.empty();
         }
         BlockPos furnacePosition = furnace.orElseThrow();
+        UUID owner = UUID.nameUUIDFromBytes(("totem-villagers:pool-mine:" + village.id()).getBytes(StandardCharsets.UTF_8));
+        dev.totem.villagers.world.MinerFurnaceWorkstation.markGenerated(level, furnacePosition);
+        return Optional.of(poolMineBounds(level, owner, furnacePosition));
+    }
+
+    /** Recover an original, pre-marker pool entrance from its generated geometry and persisted bounds. */
+    public static boolean originalPoolFurnace(ServerLevel level, WorkZone recorded, BlockPos furnace) {
+        var expected = poolMineBounds(level, recorded.ownerId(), furnace);
+        return expected.maximum().equals(recorded.maximum()) && expected.minimum().x() == recorded.minimum().x()
+                && expected.minimum().z() == recorded.minimum().z() && expected.minimum().y() >= recorded.minimum().y()
+                && matchesGeneratedMine(level, furnace);
+    }
+
+    private static WorkZone poolMineBounds(ServerLevel level, UUID owner, BlockPos furnacePosition) {
         List<BlockPos> bounds = new ArrayList<>();
         bounds.add(furnacePosition);
         BlockPos center = VillageUtilityFeature.mineCenter(furnacePosition);
@@ -595,8 +612,7 @@ public final class VillageWorldgenBootstrapRuntime {
                 bounds.add(landing.relative(inwardDirection(VillageUtilityFeature.mineDirection(), MINE_SPIRAL.get(step))));
             }
         }
-        UUID owner = UUID.nameUUIDFromBytes(("totem-villagers:pool-mine:" + village.id()).getBytes(StandardCharsets.UTF_8));
-        return Optional.of(zone(level, owner, bounds));
+        return zone(level, owner, bounds);
     }
 
     private static boolean matchesGeneratedMine(ServerLevel level, BlockPos furnace) {

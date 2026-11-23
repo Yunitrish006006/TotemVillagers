@@ -28,6 +28,9 @@ public final class LoadedVillagerCache {
                 invalidate(level);
             }
         });
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
+            if (entity instanceof Villager) invalidate(level);
+        });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             synchronized (SNAPSHOTS) {
                 SNAPSHOTS.clear();

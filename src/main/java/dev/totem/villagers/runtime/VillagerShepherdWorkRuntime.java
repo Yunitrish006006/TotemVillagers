@@ -27,6 +27,8 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.animal.sheep.Sheep;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import dev.totem.villagers.world.ShearUse;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -98,11 +100,25 @@ public final class VillagerShepherdWorkRuntime {
         VillagerWorkInventory inventory = VillagerWorkInventorySavedData.forServer(level.getServer())
                 .inventory(shepherd.getUUID());
         Optional<ShepherdContext> context = resolveContext(level, shepherd);
+        if (context.isPresent()) VillagerHeadStatus.clear(shepherd, VillagerHeadStatus.Kind.LOOM);
+        else if (!shepherd.isSleeping() && !inDanger(shepherd)) {
+            var site = shepherd.getBrain().getMemory(MemoryModuleType.JOB_SITE).orElse(null);
+            if (site == null || site.dimension().equals(level.dimension()) && level.isLoaded(site.pos()))
+                VillagerHeadStatus.report(shepherd, VillagerHeadStatus.Kind.LOOM);
+        }
         List<WorkCandidate> candidates = context.map(value -> candidates(
                 level, shepherd, state, value, catalog, inventory)).orElseGet(List::of);
+        if (!candidates.isEmpty() && ShearUse.best(inventory.snapshot()).isEmpty()) {
+            if (!shepherd.isBaby() && shepherd.isAlive() && !shepherd.isTrading() && !shepherd.isSleeping()
+                    && !inDanger(shepherd) && !level.isRaided(shepherd.blockPosition())) buySpareShears(level, shepherd, inventory);
+            if (ShearUse.best(inventory.snapshot()).isEmpty()) {
+                VillagerHeadStatus.report(shepherd, VillagerHeadStatus.Kind.SHEARS);
+                candidates = List.of();
+            } else VillagerHeadStatus.clear(shepherd, VillagerHeadStatus.Kind.SHEARS);
+        } else VillagerHeadStatus.clear(shepherd, VillagerHeadStatus.Kind.SHEARS);
         Optional<Sheep> activeSheep = state.activeWork().flatMap(active -> active.worldTarget())
                 .flatMap(WorldWorkTarget::entityId).map(level::getEntity).filter(Sheep.class::isInstance).map(Sheep.class::cast);
-        boolean atTarget = activeSheep.map(sheep -> shepherd.distanceToSqr(sheep) <= WORK_REACH_SQUARED).orElse(false);
+        boolean atTarget = activeSheep.map(sheep -> withinReach(shepherd, sheep)).orElse(false);
         WorkScheduleInput input = new WorkScheduleInput(shepherd.getUUID(), "minecraft:shepherd", level.getGameTime(),
                 shepherd.isAlive(), level.isLoaded(shepherd.blockPosition()), inDanger(shepherd), shepherd.isSleeping(),
                 level.isRaided(shepherd.blockPosition()), context.isPresent(), atTarget, candidates);
@@ -164,26 +180,42 @@ public final class VillagerShepherdWorkRuntime {
     private static VillagerWorkState commit(ServerLevel level, Villager shepherd, VillagerWorkState state,
                                             WorkOrder order, ShepherdContext context, VillagerWorkInventory inventory) {
         if (context == null) return failed(state, order, "job site changed");
-        ItemStack produced = new ItemStack(Blocks.WOOL.pick(
-                ShepherdWorldWorkAction.outputColour(order).orElseThrow()).asItem(), order.output().count());
-        if (!inventory.canInsertExact(produced)) return failed(state, order, "personal work inventory is full");
         Sheep sheep = state.activeWork().flatMap(active -> active.worldTarget()).flatMap(WorldWorkTarget::entityId)
                 .map(level::getEntity).filter(Sheep.class::isInstance).map(Sheep.class::cast).orElse(null);
         if (sheep == null || !validTarget(level, shepherd, context, sheep, order, false)
-                || !ACTION.complete(level, shepherd, sheep, order)) {
+                || !ACTION.complete(level, shepherd, sheep, order, inventory)) {
             return failed(state, order, "flock target rejected");
-        }
-        if (!inventory.insertExact(produced)) {
-            throw new IllegalStateException("Shepherd inventory changed during same-tick wool insertion");
         }
         TradeDiagnostic completed = new TradeDiagnostic(order.id(), WorkSource.WORLD, order.workTicks(), "");
         return state.withActiveWork(Optional.empty(), Optional.of(completed));
     }
 
+    static void buySpareShears(ServerLevel level, Villager shepherd, VillagerWorkInventory buyer) {
+        var money = new ItemStack(Items.EMERALD, 3);
+        if (buyer.countMatchingItem(money) <= money.getCount() || ShearUse.best(buyer.snapshot()).isPresent()) return;
+        var inventories = VillagerWorkInventorySavedData.forServer(level.getServer());
+        var suppliers = level.getEntitiesOfClass(Villager.class, shepherd.getBoundingBox().inflate(32), v ->
+                v != shepherd && v.isAlive() && !v.isBaby() && !v.isTrading() && !v.isSleeping()
+                        && ("minecraft:shepherd".equals(professionId(v)) || "minecraft:toolsmith".equals(professionId(v))))
+                .stream().sorted(Comparator.comparingDouble(shepherd::distanceToSqr)).toList();
+        for (var supplier : suppliers) {
+            var seller = inventories.inventory(supplier.getUUID());
+            var stock = seller.snapshot();
+            if (stock.stream().filter(ShearUse::usable).mapToInt(ItemStack::getCount).sum() < 2) continue;
+            var goods = ShearUse.best(stock).orElseThrow();
+            if (shepherd.distanceToSqr(supplier) <= 9 && shepherd.hasLineOfSight(supplier)) {
+                if (WorkshopLocalMarket.exchange(inventories, seller, buyer, goods, money)) return;
+            } else {
+                var path = shepherd.getNavigation().createPath(supplier, 1);
+                if (path != null && path.canReach() && shepherd.getNavigation().moveTo(path, .5)) return;
+            }
+        }
+    }
+
     private static Optional<ShepherdContext> resolveContext(ServerLevel level, Villager shepherd) {
         GlobalPos jobSite = shepherd.getBrain().getMemory(MemoryModuleType.JOB_SITE).orElse(null);
         if (jobSite == null || !jobSite.dimension().equals(level.dimension())
-                || !level.isLoaded(jobSite.pos())) return Optional.empty();
+                || !level.isLoaded(jobSite.pos()) || !level.getBlockState(jobSite.pos()).is(Blocks.LOOM)) return Optional.empty();
         return Optional.of(new ShepherdContext(jobSite));
     }
 
@@ -192,9 +224,62 @@ public final class VillagerShepherdWorkRuntime {
         var outputColour = ShepherdWorldWorkAction.outputColour(order).orElse(null);
         return outputColour != null && sheep.isAlive() && sheep.getColor() == outputColour && sheep.readyForShearing()
                 && level.isLoaded(sheep.blockPosition()) && sheep.distanceToSqr(Vec3.atCenterOf(context.jobSite().pos())) <= FLOCK_RADIUS_SQUARED
-                && WorldWorkPermissions.mayWork(level, shepherd, sheep.blockPosition())
-                && (!requirePath || shepherd.getNavigation().createPath(sheep, 0) != null)
+                && dev.totem.villagers.worker.ProductionParcel.get(level.getServer()).canWorkPasture(level, shepherd, context.jobSite().pos(), sheep.blockPosition())
+                && (!requirePath || canApproach(shepherd, sheep))
                 && "minecraft:sheep".equals(order.worldTargetEntityType());
+    }
+
+    static boolean prepareShearing(ServerLevel level, Villager worker, Sheep sheep, VillagerWorkInventory inventory) {
+        if (ShearUse.best(inventory.snapshot()).isEmpty()) {
+            buySpareShears(level, worker, inventory);
+            // The next trial pass rechecks household food after a purchase.
+            return false;
+        }
+        if (withinReach(worker, sheep)) return true;
+        var path = worker.getNavigation().createPath(sheep, 0);
+        if (path != null && path.canReach()) worker.getNavigation().moveTo(path, .5);
+        return false;
+    }
+
+    /** A different household may serve a persistent colour shortage outside this shepherd's pasture. */
+    static boolean canSupplyColour(ServerLevel level, Villager worker, Villager customer, WorkOrder order,
+                                   ItemStack wool, VillagerWorkInventorySavedData inventories) {
+        var station = resolveContext(level, worker).orElse(null);
+        if (station == null || !WorldWorkPermissions.mayWork(level, worker, station.jobSite().pos())) return false;
+        if (worker.distanceToSqr(customer) > WORK_REACH_SQUARED || !customer.hasLineOfSight(worker)) {
+            var path = customer.getNavigation().createPath(worker, 1);
+            if (path == null || !path.canReach()) return false;
+        }
+        var inventory = inventories.inventory(worker.getUUID());
+        if (WorkshopLocalMarket.hasSurplus(level, worker, inventory, wool)) return true;
+        if (ShearUse.best(inventory.snapshot()).isEmpty()) return false;
+        var loom = station.jobSite().pos();
+        var parcels = dev.totem.villagers.worker.ProductionParcel.get(level.getServer());
+        var colour = ShepherdWorldWorkAction.outputColour(order).orElseThrow();
+        return level.getEntitiesOfClass(Sheep.class, new AABB(loom).inflate(32), sheep ->
+                        sheep.isAlive() && !sheep.isBaby() && sheep.getColor() == colour
+                                && sheep.distanceToSqr(Vec3.atCenterOf(loom)) <= FLOCK_RADIUS_SQUARED
+                                && parcels.canWorkPasture(level, worker, loom, sheep.blockPosition())
+                                && (sheep.readyForShearing() || !sheep.isNoAi() && level.getBlockState(sheep.blockPosition().below()).is(Blocks.GRASS_BLOCK)))
+                .stream().anyMatch(sheep -> canApproach(worker, sheep));
+    }
+
+    static Optional<Sheep> trialSheep(ServerLevel level, Villager worker, net.minecraft.core.BlockPos loom, WorkOrder order) {
+        var pasture = new AABB(loom).inflate(32);
+        var context = new ShepherdContext(GlobalPos.of(level.dimension(), loom));
+        return level.getEntitiesOfClass(Sheep.class, pasture, s -> validTarget(level, worker, context, s, order, false))
+                .stream().sorted(Comparator.comparingDouble(worker::distanceToSqr))
+                .filter(s -> canApproach(worker, s)).findFirst();
+    }
+
+    private static boolean withinReach(Villager worker, Sheep sheep) {
+        return worker.distanceToSqr(sheep) <= WORK_REACH_SQUARED && worker.hasLineOfSight(sheep);
+    }
+
+    private static boolean canApproach(Villager worker, Sheep sheep) {
+        if (withinReach(worker, sheep)) return true;
+        var path = worker.getNavigation().createPath(sheep, 0);
+        return path != null && path.canReach();
     }
 
     private static VillagerWorkState failed(VillagerWorkState state, WorkOrder order, String reason) {

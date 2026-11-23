@@ -68,7 +68,7 @@ public final class WorkerAssignmentSavedData extends SavedData {
     public synchronized boolean extendMinerZoneDownward(UUID zoneId, int newMinimumY) {
         WorkZoneRecord current = zones.get(zoneId);
         if (current == null || !WorkerProfessionRegistry.MINER.id().equals(current.roleId())
-                || newMinimumY != current.zone().minimum().y() - 1) {
+                || current.zone().personal() || newMinimumY != current.zone().minimum().y() - 1) {
             return false;
         }
         WorkZone zone = current.zone();
@@ -82,20 +82,19 @@ public final class WorkerAssignmentSavedData extends SavedData {
     /** The zone owner must match the villager-assignment operator, preventing cross-owner zone borrowing. */
     public synchronized boolean assignZone(UUID actorId, WorkerAssignment assignment, UUID zoneId) {
         WorkZoneRecord zone = zones.get(zoneId);
-        if (zone == null || !zone.zone().ownerId().equals(actorId) || !zone.roleId().equals(assignment.roleId())) {
+        if (zone == null || !zone.zone().ownerId().equals(actorId) || !zone.roleId().equals(assignment.roleId())
+                || zone.zone().personal() && !zone.zone().ownerId().equals(assignment.villagerId())) {
             return false;
         }
         WorkerAssignment updated = assignment.withWorkZone(Optional.of(zoneId));
-        WorkerAssignment previous = assignments.put(updated.villagerId(), updated);
-        if (!updated.equals(previous)) {
-            setDirty();
-        }
+        putAssignment(updated);
         return true;
     }
 
     public synchronized void putAssignment(WorkerAssignment assignment) {
         Objects.requireNonNull(assignment, "assignment");
         WorkerAssignment previous = assignments.put(assignment.villagerId(), assignment);
+        if (previous != null && !previous.workZoneId().equals(assignment.workZoneId())) releasePersonalPlot(previous);
         if (!assignment.equals(previous)) {
             setDirty();
         }
@@ -107,9 +106,27 @@ public final class WorkerAssignmentSavedData extends SavedData {
 
     /** Removes a dead worker's specialist claim so its configured zone can be staffed again. */
     public synchronized void removeAssignment(UUID villagerId) {
-        if (assignments.remove(villagerId) != null) {
+        var previous = assignments.remove(villagerId);
+        if (previous != null) {
+            releasePersonalPlot(previous);
             setDirty();
         }
+    }
+
+    private void releasePersonalPlot(WorkerAssignment assignment) {
+        assignment.workZoneId().flatMap(this::getZone).filter(r -> r.zone().personal()
+                && r.zone().ownerId().equals(assignment.villagerId())).ifPresent(r -> zones.remove(r.id()));
+    }
+
+    public synchronized boolean isPersonalForestRoot(String dimension, net.minecraft.core.BlockPos pos) {
+        var root = new BlockCoordinate(pos.getX(), pos.getY(), pos.getZ());
+        return zones.values().stream().map(WorkZoneRecord::zone)
+                .anyMatch(z -> z.naturalTimber() && z.dimensionId().equals(dimension) && z.minimum().equals(root));
+    }
+
+    public synchronized boolean overlapsOtherZone(WorkZone plot, net.minecraft.core.BlockPos cell) {
+        var at = new BlockCoordinate(cell.getX(), cell.getY(), cell.getZ());
+        return zones.values().stream().anyMatch(r -> !r.zone().equals(plot) && r.zone().contains(plot.dimensionId(), at));
     }
 
     /** Test and maintenance hook; production zones are normally retained by their operator. */
@@ -118,6 +135,11 @@ public final class WorkerAssignmentSavedData extends SavedData {
             assignments.entrySet().removeIf(entry -> entry.getValue().workZoneId().filter(zoneId::equals).isPresent());
             setDirty();
         }
+    }
+
+    public synchronized boolean containsZoneCell(String dimension, net.minecraft.core.BlockPos pos) {
+        var cell = new BlockCoordinate(pos.getX(), pos.getY(), pos.getZ());
+        return zones.values().stream().anyMatch(zone -> zone.zone().contains(dimension, cell));
     }
 
     public synchronized Map<UUID, WorkZoneRecord> zoneSnapshot() {

@@ -68,6 +68,29 @@ public final class WorldMaterialDeliveryGameTest {
     }
 
     @GameTest(maxTicks = 40)
+    public void minerReplacesProtectedFurnaceWithPermittedStation(GameTestHelper h) {
+        var level = h.getLevel();
+        var miner = spawnVillager(h, new BlockPos(2, 3, 2));
+        var near = miner.blockPosition().east();
+        var far = near.east();
+        var area = new WorkZone(UUID.randomUUID(), level.dimension().identifier().toString(),
+                new BlockCoordinate(near.getX(), near.getY(), near.getZ()),
+                new BlockCoordinate(far.getX(), far.getY(), far.getZ()));
+        try {
+            level.setBlockAndUpdate(near, Blocks.FURNACE.defaultBlockState());
+            level.setBlockAndUpdate(far, Blocks.FURNACE.defaultBlockState());
+            miner.getBrain().setMemory(MemoryModuleType.JOB_SITE, GlobalPos.of(level.dimension(), near));
+            PROTECTED_TARGET.set(near);
+            require(h, dev.totem.villagers.world.MinerFurnaceWorkstation.ensureAssigned(level, miner, area)
+                    .filter(far::equals).isPresent(), "Miner retained or selected a protected furnace");
+            h.succeed();
+        } finally {
+            PROTECTED_TARGET.compareAndSet(near, null);
+            miner.discard();
+        }
+    }
+
+    @GameTest(maxTicks = 40)
     public void minerStoresVanillaCobblestoneExactlyOnce(GameTestHelper helper) {
         BlockPos target = helper.absolutePos(new BlockPos(8, 2, 8));
         Villager miner = spawnVillager(helper, new BlockPos(8, 3, 8));
@@ -593,6 +616,8 @@ public final class WorldMaterialDeliveryGameTest {
                     lumberjackOrder(), inventory), "Lumberjack could not commit a mature tree to its personal material store");
             require(helper, count(inventory.snapshot(), Items.OAK_LOG) == 4,
                     "Lumberjack did not store the four native log drops in its personal inventory");
+            require(helper, count(inventory.snapshot(), Items.OAK_LEAVES) == 1,
+                    "A harvested canopy should supply one clipping for the village fibre recipe");
             ItemStack usedAxe = inventory.snapshot().stream().filter(stack -> stack.is(Items.IRON_AXE))
                     .findFirst().orElse(null);
             require(helper, usedAxe != null && usedAxe.getDamageValue() == 1,

@@ -1,5 +1,7 @@
 package dev.totem.villagers.runtime;
 
+import dev.totem.villagers.worker.ProductionParcel;
+
 import dev.totem.villagers.config.WorkBackedTradingMode;
 import dev.totem.villagers.config.WorkBackedTradingSettingsSavedData;
 import dev.totem.villagers.worker.TotemVillagerProfessions;
@@ -47,7 +49,17 @@ public final class VillagerResourceWorkforceRuntime {
     }
 
     public static void register() {
+        MinerFurnaceWorkstation.register();
+        HouseholdResourceRequests.register();
         ServerTickEvents.END_SERVER_TICK.register(VillagerResourceWorkforceRuntime::tick);
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
+            if (entity instanceof Villager && entity.getRemovalReason() != null && entity.getRemovalReason().shouldDestroy()) {
+                ProductionParcel.get(level.getServer()).release(entity.getUUID());
+                var assignments = WorkerAssignmentSavedData.forServer(level.getServer());
+                assignments.getAssignment(entity.getUUID()).filter(a -> isResourceRole(a.roleId()))
+                        .ifPresent(a -> assignments.removeAssignment(a.villagerId()));
+            }
+        });
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
             if (entity instanceof Villager villager) {
                 recruitLoadedVillager(level, villager);
@@ -57,7 +69,7 @@ public final class VillagerResourceWorkforceRuntime {
 
     /** Public only for deterministic GameTests; the live server allocates every five seconds. */
     public static void tickForGameTest(MinecraftServer server) {
-        allocate(server);
+        allocate(server, Set.of());
     }
 
     /**
@@ -65,8 +77,8 @@ public final class VillagerResourceWorkforceRuntime {
      * the same Farmer → Miner → Lumberjack → Toolsmith order before vanilla POI claiming can
      * consume the remaining unemployed residents.
      */
-    static void allocateFoundingWorkforce(MinecraftServer server) {
-        allocate(server);
+    public static void allocateFoundingWorkforce(MinecraftServer server, List<Villager> founders) {
+        allocate(server, founders.stream().map(Villager::getUUID).collect(java.util.stream.Collectors.toSet()));
     }
 
     /** Public only for deterministic GameTests of the live entity-load recruitment path. */
@@ -79,7 +91,7 @@ public final class VillagerResourceWorkforceRuntime {
                 || server.overworld().getGameTime() % ALLOCATION_INTERVAL_TICKS != 0L) {
             return;
         }
-        allocate(server);
+        allocate(server, Set.of());
     }
 
     /**
@@ -93,14 +105,17 @@ public final class VillagerResourceWorkforceRuntime {
                 || !isEligibleCandidate(villager, WorkerAssignmentSavedData.forServer(server))) {
             return;
         }
-        allocate(server);
+        allocate(server, Set.of());
     }
 
-    private static void allocate(MinecraftServer server) {
+    private static void allocate(MinecraftServer server, Set<UUID> founders) {
         WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(server);
-        Map<UUID, WorkZoneRecord> zones = assignments.zoneSnapshot();
         for (ServerLevel level : server.getAllLevels()) {
-            List<WorkZoneRecord> resourceZones = zones.values().stream()
+            for (Villager resident : LoadedVillagerCache.loaded(level)) {
+                ProductionParcel.get(server).reconcile(level, resident);
+                reconcileResourceHome(level, resident, assignments);
+            }
+            List<WorkZoneRecord> resourceZones = assignments.zoneSnapshot().values().stream()
                     .filter(zone -> isResourceRole(zone.roleId()))
                     .filter(zone -> zone.zone().dimensionId().equals(level.dimension().identifier().toString()))
                     .toList();
@@ -109,15 +124,21 @@ public final class VillagerResourceWorkforceRuntime {
             }
             List<? extends Villager> villagers = LoadedVillagerCache.loaded(level);
             List<Villager> candidates = villagers.stream()
-                    .filter(villager -> isEligibleCandidate(villager, assignments))
+                    .filter(villager -> isEligibleCandidate(villager, assignments) && VillagerCareerHistory.mayChange(villager))
                     .sorted(Comparator.comparing(villager -> villager.getUUID().toString()))
                     .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
             Set<UUID> staffedZones = staffedResourceZones(assignments.assignmentSnapshot());
 
             assignFarmers(level, villagers, candidates, resourceZones);
+            // An established miner or lumberjack can take a new local zone without losing trades or changing career.
+            candidates.addAll(0, villagers.stream().filter(v -> assignments.getAssignment(v.getUUID())
+                    .filter(a -> a.automaticallyAssigned() && isResourceRole(a.roleId()) && a.workZoneId().isEmpty()
+                            && a.home().isPresent() && a.home().equals(v.getBrain().getMemory(MemoryModuleType.HOME))).isPresent())
+                    .sorted(Comparator.comparing(Villager::getUUID)).toList());
             assignSpecialists(level, candidates, resourceZones, staffedZones, TotemVillagerProfessions.MINER_ID, assignments);
             assignSpecialists(level, candidates, resourceZones, staffedZones, TotemVillagerProfessions.LUMBERJACK_ID, assignments);
-            assignToolsmith(level, villagers, candidates, resourceZones);
+            if (!founders.isEmpty()) assignToolsmith(level, villagers, candidates.stream()
+                    .filter(v -> founders.contains(v.getUUID())).toList(), resourceZones);
         }
     }
 
@@ -171,19 +192,59 @@ public final class VillagerResourceWorkforceRuntime {
         }
     }
 
-    private static Optional<BlockPos> claimExactJobSite(
+    /** Successful starter work may establish the first food producer of a household. */
+    static void settleFoodProducer(ServerLevel level, Villager worker, BlockPos productionCell, boolean field) {
+        if (!VillagerCareerHistory.mayChange(worker)
+                || !isEligibleCandidate(worker, WorkerAssignmentSavedData.forServer(level.getServer()))) return;
+        var residents = LoadedVillagerCache.loaded(level);
+        var home = worker.getBrain().getMemory(MemoryModuleType.HOME).orElseThrow();
+        if (residents.stream().anyMatch(resident -> resident.getBrain().getMemory(MemoryModuleType.HOME)
+                .filter(bed -> bed.dimension().equals(home.dimension()) && bed.pos().distSqr(home.pos()) < 24 * 24).isPresent()
+                && (isFarmer(resident) || "minecraft:fisherman".equals(professionId(resident)))
+                && resident.getBrain().hasMemoryValue(MemoryModuleType.JOB_SITE))) return;
+        String role = field ? "minecraft:farmer" : "minecraft:fisherman";
+        var profession = BuiltInRegistries.VILLAGER_PROFESSION.getValue(Identifier.parse(role));
+        var block = field ? Blocks.COMPOSTER : Blocks.BARREL;
+        var parcels = ProductionParcel.get(level.getServer());
+        for (BlockPos site : BlockPos.withinManhattan(worker.blockPosition(), 6)) {
+            if (!level.isLoaded(site) || !level.getBlockState(site).is(block)
+                    || !dev.totem.villagers.world.WorldWorkPermissions.mayWork(level, worker, site)
+                    || jobSiteAlreadyStaffed(level, site, residents, role)
+                    || !field && !dev.totem.villagers.world.FishermanWorkstation.isSupportedJobSite(level, site)) continue;
+            if (site.distSqr(worker.blockPosition()) > 4) {
+                var path = worker.getNavigation().createPath(site, 1);
+                if (path == null || !path.canReach()) continue;
+            }
+            var ticket = claimExactJobSite(level, profession, site);
+            if (ticket.isEmpty()) continue;
+            var station = GlobalPos.of(level.dimension(), ticket.get().immutable());
+            if (!parcels.reserve(level, worker, station, productionCell, field)) {
+                level.getPoiManager().release(ticket.get());
+                continue;
+            }
+            establishVanillaProfession(level, worker, profession, station.pos());
+            VillagerStarterSupplySavedData.forServer(level.getServer()).markProfessionKit(worker.getUUID());
+            return;
+        }
+    }
+
+    static Optional<BlockPos> claimExactJobSite(
             ServerLevel level, VillagerProfession profession, BlockPos site
     ) {
         return level.getPoiManager().take(profession.heldJobSite(),
                 (poi, candidate) -> candidate.equals(site), site, 1).filter(site::equals);
     }
 
-    private static void establishVanillaProfession(
+    static void establishVanillaProfession(
             ServerLevel level, Villager villager, VillagerProfession profession, BlockPos jobSite
     ) {
         villager.setVillagerData(villager.getVillagerData().withProfession(
                 BuiltInRegistries.VILLAGER_PROFESSION.wrapAsHolder(profession)));
         villager.setVillagerDataFinalized(true);
+        if (villager.getVillagerData().profession().is(VillagerProfession.TOOLSMITH)
+                || villager.getVillagerData().profession().is(VillagerProfession.LIBRARIAN))
+            GuardEquipmentOrders.appointedSpecialist(villager, GlobalPos.of(level.dimension(), jobSite));
+        VillagerCareerHistory.appointed(villager);
         villager.refreshBrain(level);
         villager.getBrain().setMemory(MemoryModuleType.JOB_SITE,
                 GlobalPos.of(level.dimension(), jobSite));
@@ -202,35 +263,93 @@ public final class VillagerResourceWorkforceRuntime {
             return;
         }
         for (Villager candidate : candidates) {
-            if (!isUnemployed(candidate)) {
-                continue;
+            var prior = assignments.getAssignment(candidate.getUUID());
+            boolean relocating = prior.filter(a -> a.automaticallyAssigned() && a.roleId().equals(roleId.toString())
+                    && a.workZoneId().isEmpty() && roleId.toString().equals(professionId(candidate))).isPresent();
+            if (prior.isPresent() ? !relocating : !isUnemployed(candidate)) continue;
+            var home = candidate.getBrain().getMemory(MemoryModuleType.HOME)
+                    .filter(h -> h.dimension().equals(level.dimension()) && level.isLoaded(h.pos())
+                            && level.getBlockState(h.pos()).is(net.minecraft.tags.BlockTags.BEDS));
+            if (relocating && home.isEmpty()) continue;
+            var vacant = resourceZones.stream()
+                    .filter(zone -> zone.roleId().equals(roleId.toString()) && !staffedZones.contains(zone.id()))
+                    .filter(zone -> !zone.zone().personal() || zone.zone().ownerId().equals(candidate.getUUID()))
+                    .filter(zone -> distanceToZoneSquared(candidate, zone) <= RESOURCE_ZONE_RECRUIT_RANGE_SQUARED)
+                    .filter(zone -> home.isEmpty() || distanceToZoneSquared(net.minecraft.world.phys.Vec3.atCenterOf(home.get().pos()), zone)
+                            <= RESOURCE_ZONE_RECRUIT_RANGE_SQUARED)
+                    .sorted(Comparator.comparingDouble((WorkZoneRecord zone) -> distanceToZoneSquared(candidate, zone))
+                            .thenComparing(WorkZoneRecord::id))
+                    .toList();
+            for (var zone : vacant) {
+                var station = roleId.equals(TotemVillagerProfessions.MINER_ID)
+                        ? MinerFurnaceWorkstation.findUnclaimed(level, candidate, zone.zone()) : Optional.<BlockPos>empty();
+                if (roleId.equals(TotemVillagerProfessions.MINER_ID) && station.isEmpty()) continue;
+                candidate.setVillagerData(candidate.getVillagerData().withProfession(
+                        BuiltInRegistries.VILLAGER_PROFESSION.wrapAsHolder(profession)));
+                station.ifPresent(site -> candidate.getBrain().setMemory(MemoryModuleType.JOB_SITE,
+                        GlobalPos.of(level.dimension(), site)));
+                assignments.putAssignment(new WorkerAssignment(candidate.getUUID(), roleId.toString(),
+                        Optional.of(zone.id()), Optional.empty(), true, home));
+                if (!relocating) VillagerCareerHistory.appointed(candidate);
+                staffedZones.add(zone.id());
+                break;
             }
-            Optional<WorkZoneRecord> zone = resourceZones.stream()
-                    .filter(candidateZone -> candidateZone.roleId().equals(roleId.toString()))
-                    .filter(candidateZone -> !staffedZones.contains(candidateZone.id()))
-                    .filter(candidateZone -> distanceToZoneSquared(candidate, candidateZone) <= RESOURCE_ZONE_RECRUIT_RANGE_SQUARED)
-                    .min(Comparator.comparing(entry -> entry.id().toString()));
-            if (zone.isEmpty()) {
-                continue;
-            }
-            WorkZoneRecord selected = zone.orElseThrow();
-            Optional<BlockPos> station = roleId.equals(TotemVillagerProfessions.MINER_ID)
-                    ? MinerFurnaceWorkstation.findUnclaimed(level, candidate, selected.zone())
-                    : Optional.empty();
-            if (roleId.equals(TotemVillagerProfessions.MINER_ID) && station.isEmpty()) {
-                continue;
-            }
-            candidate.setVillagerData(candidate.getVillagerData().withProfession(
-                    BuiltInRegistries.VILLAGER_PROFESSION.wrapAsHolder(profession)));
-            station.ifPresent(site -> candidate.getBrain().setMemory(MemoryModuleType.JOB_SITE,
-                    GlobalPos.of(level.dimension(), site)));
-            assignments.putAssignment(new WorkerAssignment(candidate.getUUID(), roleId.toString(),
-                    Optional.of(selected.id()), Optional.empty()));
-            staffedZones.add(selected.id());
         }
     }
 
-    private static boolean isEligibleCandidate(Villager villager, WorkerAssignmentSavedData assignments) {
+    static void reconcileResourceHome(ServerLevel level, Villager worker, WorkerAssignmentSavedData assignments) {
+        var a = assignments.getAssignment(worker.getUUID()).orElse(null);
+        if (a == null || !a.automaticallyAssigned() || !isResourceRole(a.roleId())) return;
+        var brain = worker.getBrain();
+        var rememberedHome = brain.getMemory(MemoryModuleType.HOME);
+        if (rememberedHome.filter(h -> h.dimension().equals(level.dimension()) && !level.isLoaded(h.pos())).isPresent()) return;
+        var home = rememberedHome.filter(h -> h.dimension().equals(level.dimension()) && level.getBlockState(h.pos()).is(net.minecraft.tags.BlockTags.BEDS));
+        var assignedZone = a.workZoneId().flatMap(assignments::getZone);
+        boolean outsideHomeRange = rememberedHome.isPresent() && assignedZone.filter(z ->
+                !z.zone().dimensionId().equals(rememberedHome.get().dimension().identifier().toString())
+                        || distanceToZoneSquared(net.minecraft.world.phys.Vec3.atCenterOf(rememberedHome.get().pos()), z)
+                        > RESOURCE_ZONE_RECRUIT_RANGE_SQUARED).isPresent();
+        boolean lostForest = assignedZone.map(WorkZoneRecord::zone).filter(z -> z.naturalTimber()
+                && z.dimensionId().equals(level.dimension().identifier().toString())).map(z -> {
+                    var root = z.minimum();
+                    return !dev.totem.villagers.world.NaturalOakTimber.viableForestRoot(level, new BlockPos(root.x(), root.y(), root.z()));
+                }).orElse(false);
+        boolean exhausted = assignedZone.map(WorkZoneRecord::zone).filter(z -> z.naturalQuarry()
+                && z.dimensionId().equals(level.dimension().identifier().toString()))
+                .filter(z -> dev.totem.villagers.world.NaturalStoneFaces.exhausted(level,z)).isPresent();
+        boolean moved = exhausted || lostForest || outsideHomeRange || a.home().isPresent() && !a.home().equals(home);
+        var site = brain.getMemory(MemoryModuleType.JOB_SITE);
+        boolean lostFurnace = false;
+        if (!moved && a.roleId().equals("totem:miner") && assignedZone.isPresent()) {
+            var zone = assignedZone.get().zone();
+            if (zone.naturalQuarry()) {
+                var furnace = new BlockPos(zone.minimum().x() + 2, zone.minimum().y() + 1, zone.minimum().z() + 2);
+                lostFurnace = level.isLoaded(furnace) && !MinerFurnaceWorkstation.privateStationAvailable(level, worker, zone, furnace);
+            } else if (site.isPresent()) {
+                var station = site.get();
+                lostFurnace = station.dimension().equals(level.dimension()) && level.isLoaded(station.pos())
+                        && !level.getBlockState(station.pos()).is(Blocks.FURNACE)
+                        && MinerFurnaceWorkstation.ensureAssigned(level, worker, zone).isEmpty();
+            } else if (zone.dimensionId().equals(level.dimension().identifier().toString())
+                    && distanceToZoneSquared(worker, assignedZone.get()) <= RESOURCE_ZONE_RECRUIT_RANGE_SQUARED
+                    && MinerFurnaceWorkstation.ensureAssigned(level, worker, zone).isEmpty()) {
+                // Verify absence even if vanilla has already cleared its job-site memory.
+                var low = zone.minimum();
+                var high = zone.maximum();
+                long dx = (long) high.x() - low.x() + 1, dy = (long) high.y() - low.y() + 1, dz = (long) high.z() - low.z() + 1;
+                if (dx <= 4096 && dy <= 4096 && dz <= 4096 && dx * dy * dz <= 4096) {
+                    lostFurnace = BlockPos.betweenClosedStream(new BlockPos(low.x(), low.y(), low.z()), new BlockPos(high.x(), high.y(), high.z()))
+                            .allMatch(p -> level.isLoaded(p) && !level.getBlockState(p).is(Blocks.FURNACE));
+                }
+            }
+        }
+        if (!moved && !lostFurnace && a.home().equals(home)) return;
+        var zone = moved || lostFurnace ? Optional.<UUID>empty() : a.workZoneId();
+        assignments.putAssignment(new WorkerAssignment(a.villagerId(), a.roleId(), zone, a.managedVillageId(), true, home));
+        if ((moved || lostFurnace) && a.roleId().equals("totem:miner")) brain.eraseMemory(MemoryModuleType.JOB_SITE);
+    }
+
+    static boolean isEligibleCandidate(Villager villager, WorkerAssignmentSavedData assignments) {
         return !villager.isBaby() && isUnemployed(villager) && assignments.getAssignment(villager.getUUID()).isEmpty();
     }
 
@@ -339,10 +458,14 @@ public final class VillagerResourceWorkforceRuntime {
     }
 
     private static double distanceToZoneSquared(Villager villager, WorkZoneRecord zone) {
-        double x = clamp(villager.getX(), zone.zone().minimum().x(), zone.zone().maximum().x());
-        double y = clamp(villager.getY(), zone.zone().minimum().y(), zone.zone().maximum().y());
-        double z = clamp(villager.getZ(), zone.zone().minimum().z(), zone.zone().maximum().z());
-        return villager.distanceToSqr(x, y, z);
+        return distanceToZoneSquared(villager.position(), zone);
+    }
+
+    private static double distanceToZoneSquared(net.minecraft.world.phys.Vec3 position, WorkZoneRecord zone) {
+        double x = clamp(position.x, zone.zone().minimum().x(), zone.zone().maximum().x());
+        double y = clamp(position.y, zone.zone().minimum().y(), zone.zone().maximum().y());
+        double z = clamp(position.z, zone.zone().minimum().z(), zone.zone().maximum().z());
+        return position.distanceToSqr(x, y, z);
     }
 
     private static double clamp(double value, int minimum, int maximum) {

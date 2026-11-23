@@ -8,6 +8,8 @@
     "totem-villagers-gametest.client.mixins.json"
   ],
   "entrypoints": {
+    "main": ["dev.totem.villagers.gametest.HouseholdRestartProbe", "dev.totem.villagers.runtime.ResourceParcelRestartProbe", "dev.totem.villagers.gametest.HeadStatusTrackingServer"],
+    "client": ["dev.totem.villagers.client.HeadStatusTrackingClient"],
     "fabric-gametest": [
       "dev.totem.villagers.gametest.ComponentAwareStockGameTest",
       "dev.totem.villagers.gametest.WorkshopRecipeGameTest",
@@ -18,8 +20,21 @@
       "dev.totem.villagers.gametest.FletcherTippedArrowGameTest",
       "dev.totem.villagers.gametest.FarmerSuspiciousStewGameTest",
       "dev.totem.villagers.gametest.BuilderBlueprintGameTest",
+      "dev.totem.villagers.runtime.BuilderCareerGameTest",
+      "dev.totem.villagers.runtime.BuilderSettlementGameTest",
+      "dev.totem.villagers.runtime.BuilderHouseGameTest",
+      "dev.totem.villagers.runtime.SettlementReloadGameTest",
+      "dev.totem.villagers.runtime.ToolsmithApprenticeshipGameTest",
+      "dev.totem.villagers.runtime.ResourceDiscoveryGameTest",
+      "dev.totem.villagers.runtime.HouseholdForestryGameTest",
+      "dev.totem.villagers.runtime.HouseholdQuarryGameTest",
+      "dev.totem.villagers.runtime.GuardEquipmentGameTest",
+      "dev.totem.villagers.runtime.ShepherdEquipmentGameTest",
+      "dev.totem.villagers.runtime.ButcherRationGameTest",
       "dev.totem.villagers.gametest.VillagerFoodEconomyGameTest",
       "dev.totem.villagers.gametest.FarmerWorldWorkGameTest",
+      "dev.totem.villagers.gametest.HouseholdSurvivalGameTest",
+      "dev.totem.villagers.gametest.RiverHouseholdGameTest",
       "dev.totem.villagers.gametest.FarmerGatheredCropTradesGameTest",
       "dev.totem.villagers.gametest.PlayableFarmerCycleGameTest",
       "dev.totem.villagers.gametest.WorldMaterialDeliveryGameTest",
@@ -47,6 +62,7 @@
       "dev.totem.villagers.gametest.WorldEnablementGameTest"
     ],
     "fabric-client-gametest": [
+      "dev.totem.villagers.client.VillagerHeadStatusClientGameTest",
       "dev.totem.villagers.client.WoodcutterObserverProviderClientGameTest",
       "dev.totem.villagers.client.TradeSnapshotClientGameTest",
       "dev.totem.villagers.client.VillagerTradeCatalogClientGameTest",

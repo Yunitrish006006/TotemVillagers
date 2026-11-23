@@ -15,7 +15,8 @@ public record BuilderSite(
         String templateId,
         String dimensionId,
         long anchorPosition,
-        int nextBlockIndex
+        int nextBlockIndex,
+        java.util.List<Long> finishingCourse
 ) {
     public static final Codec<BuilderSite> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             UUIDUtil.CODEC.fieldOf("id").forGetter(BuilderSite::id),
@@ -26,11 +27,13 @@ public record BuilderSite(
             Codec.STRING.fieldOf("template").forGetter(BuilderSite::templateId),
             Codec.STRING.fieldOf("dimension").forGetter(BuilderSite::dimensionId),
             Codec.LONG.fieldOf("anchor").forGetter(BuilderSite::anchorPosition),
-            Codec.INT.optionalFieldOf("next_block", 0).forGetter(BuilderSite::nextBlockIndex)
-    ).apply(instance, (id, ownerId, builderVillagerId, ignoredWorkChest, templateId, dimensionId, anchorPosition, nextBlockIndex) ->
-            new BuilderSite(id, ownerId, builderVillagerId, templateId, dimensionId, anchorPosition, nextBlockIndex)));
+            Codec.INT.optionalFieldOf("next_block", 0).forGetter(BuilderSite::nextBlockIndex),
+            Codec.LONG.listOf(0, 128).optionalFieldOf("finishing_course", java.util.List.of()).forGetter(BuilderSite::finishingCourse)
+    ).apply(instance, (id, ownerId, builderVillagerId, ignoredWorkChest, templateId, dimensionId, anchorPosition, nextBlockIndex, course) ->
+            new BuilderSite(id, ownerId, builderVillagerId, templateId, dimensionId, anchorPosition, nextBlockIndex, course)));
 
     public BuilderSite {
+        finishingCourse = java.util.List.copyOf(finishingCourse);
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(ownerId, "ownerId");
         Objects.requireNonNull(builderVillagerId, "builderVillagerId");
@@ -45,7 +48,22 @@ public record BuilderSite(
         }
     }
 
+    public BuilderSite(UUID id, UUID owner, UUID builder, String template, String dimension, long anchor, int index) {
+        this(id, owner, builder, template, dimension, anchor, index, java.util.List.of());
+    }
+
+    public BuilderSite planAccess(net.minecraft.server.level.ServerLevel level, VanillaVillageBlueprints.Blueprint blueprint) {
+        if (nextBlockIndex > 1 || blueprint.blocks().stream().skip(nextBlockIndex)
+                .anyMatch(b -> !level.isLoaded(b.position()) || !level.getBlockState(b.position()).isAir())) return this;
+        return new BuilderSite(id, ownerId, builderVillagerId, templateId, dimensionId, anchorPosition, nextBlockIndex,
+                BuilderAccessCourse.plan(level, blueprint));
+    }
+
+    public VanillaVillageBlueprints.Blueprint inConstructionOrder(VanillaVillageBlueprints.Blueprint blueprint) {
+        return BuilderAccessCourse.order(blueprint, finishingCourse);
+    }
+
     public BuilderSite withNextBlockIndex(int nextIndex) {
-        return new BuilderSite(id, ownerId, builderVillagerId, templateId, dimensionId, anchorPosition, nextIndex);
+        return new BuilderSite(id, ownerId, builderVillagerId, templateId, dimensionId, anchorPosition, nextIndex, finishingCourse);
     }
 }

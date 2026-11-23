@@ -28,6 +28,30 @@ fabricApi {
     }
 }
 
+// Run in separate JVMs against the same disposable world to exercise real save and server-restart boundaries.
+loom.runs {
+    householdRestart {
+        server()
+        source sourceSets.gametest
+        ideConfigGenerated false
+        runDir providers.gradleProperty('householdTestDir').getOrElse('build/run/household-restart')
+        vmArg providers.gradleProperty('resourceParcelProbe').isPresent() ?
+                '-Dtotem.villagers.resourceRestart=true' : '-Dtotem.villagers.householdRestart=true'
+    }
+}
+
+// Export Loom's exact test runtimes for the dedicated server and two independent rendering clients.
+tasks.register('prepareHeadStatusTracking') {
+    dependsOn 'gametestClasses', 'configureClientLaunch'
+    doLast {
+        def directory = layout.buildDirectory.dir('head-status-tracking').get().asFile
+        directory.mkdirs()
+        for (def run : ['runGameTest', 'runClientGameTest']) {
+            new File(directory, run + '.classpath').text = tasks.named(run).get().classpath.asPath
+        }
+    }
+}
+
 repositories {
     mavenCentral()
     maven { url = 'https://repo.codemc.io/repository/relativitymc/' }

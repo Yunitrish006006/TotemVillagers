@@ -108,9 +108,13 @@ public final class FishermanWorldWorkAction {
 
     /** Uses a one-cast vanilla fishing loot context with the villager as the acting entity. */
     public static List<ItemStack> catches(ServerLevel level, Villager fisherman, BlockPos water) {
+        return catches(level, fisherman, water, new ItemStack(Items.FISHING_ROD));
+    }
+
+    public static List<ItemStack> catches(ServerLevel level, Villager fisherman, BlockPos water, ItemStack rod) {
         LootParams parameters = new LootParams.Builder(level)
                 .withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(water))
-                .withParameter(LootContextParams.TOOL, new ItemStack(Items.FISHING_ROD))
+                .withParameter(LootContextParams.TOOL, rod)
                 .withParameter(LootContextParams.THIS_ENTITY, fisherman)
                 .withLuck(0.0F)
                 .create(LootContextParamSets.FISHING);

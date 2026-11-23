@@ -33,6 +33,38 @@ import java.util.List;
 
 /** Verifies the autonomous food market moves physical food/currency and uses independent Totem hunger. */
 public final class VillagerFoodEconomyGameTest {
+    @GameTest(maxTicks = 40)
+    public void farmerCombinesSmallStacksWithoutSellingItsEmergencyReserve(GameTestHelper helper) {
+        var level = helper.getLevel();
+        Villager buyer = spawnVillager(helper, new BlockPos(2, 2, 2));
+        Villager seller = spawnVillager(helper, new BlockPos(4, 2, 2));
+        var inventories = VillagerWorkInventorySavedData.forServer(level.getServer());
+        var pantry = inventories.inventory(seller.getUUID());
+        var wallet = inventories.inventory(buyer.getUUID());
+        try {
+            setFarmer(seller);
+            VillagerNutrition.setFoodLevel(buyer, 16);
+            require(helper, pantry.insertAllExact(List.of(new ItemStack(Items.BREAD, 4),
+                    new ItemStack(Items.CARROT, 8))) && wallet.insertExact(new ItemStack(Items.EMERALD)),
+                    "Could not seed mixed food market");
+            require(helper, !VillagerFoodEconomyRuntime.tryPurchaseFromFarmer(level, buyer, seller)
+                    && count(wallet, Items.EMERALD) == 1, "Sale breached the emergency reserve");
+            require(helper, pantry.insertExact(new ItemStack(Items.BEETROOT)), "Could not complete supply");
+            require(helper, VillagerFoodEconomyRuntime.tryPurchaseFromFarmer(level, buyer, seller),
+                    "No mixed ration offered with exactly 45 nutrition available");
+            require(helper, pantry.snapshot().stream().mapToInt(s -> VillagerNutrition.nutrition(s) * s.getCount()).sum() == 20
+                    && wallet.snapshot().stream().mapToInt(s -> VillagerNutrition.nutrition(s) * s.getCount()).sum() == 25
+                    && count(pantry, Items.EMERALD) == 1 && count(wallet, Items.EMERALD) == 0,
+                    "Mixed ration or payment did not balance");
+            helper.succeed();
+        } finally {
+            inventories.drain(buyer.getUUID());
+            inventories.drain(seller.getUUID());
+            buyer.discard();
+            seller.discard();
+        }
+    }
+
     @GameTest(maxTicks = 20)
     public void foodSafetyStockIncludesProducerAndEveryNearbyAdult(GameTestHelper helper) {
         require(helper, VillageProductionStockPolicy.foodTargetNutrition(0) == VillagerNutrition.MAX_FOOD_LEVEL,

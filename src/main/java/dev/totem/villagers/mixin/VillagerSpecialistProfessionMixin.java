@@ -29,6 +29,24 @@ abstract class VillagerSpecialistProfessionMixin {
             TotemVillagerProfessions.GUARD_ID.toString()
     );
 
+    @Inject(method = "finalizeSpawn", at = @At("RETURN"))
+    private void rememberStructureBirth(net.minecraft.world.level.ServerLevelAccessor level, net.minecraft.world.DifficultyInstance difficulty,
+            net.minecraft.world.entity.EntitySpawnReason reason, net.minecraft.world.entity.SpawnGroupData group,
+            org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<net.minecraft.world.entity.SpawnGroupData> callback) {
+        if (reason == net.minecraft.world.entity.EntitySpawnReason.STRUCTURE) {
+            Villager resident = (Villager) (Object) this;
+            dev.totem.villagers.runtime.VillagerCareerHistory.recordStructureBirth(resident,
+                    net.minecraft.core.GlobalPos.of(level.getLevel().dimension(), resident.blockPosition()));
+        }
+    }
+
+    @Inject(method = "setVillagerData", at = @At("TAIL"))
+    private void forgetPreviousSmithStation(VillagerData nextData, CallbackInfo callback) {
+        Villager worker = (Villager)(Object)this;
+        if (worker.level() instanceof ServerLevel && !nextData.profession().is(VillagerProfession.TOOLSMITH) && !nextData.profession().is(VillagerProfession.LIBRARIAN))
+            dev.totem.villagers.runtime.GuardEquipmentOrders.forgetSmith(worker);
+    }
+
     @Inject(method = "setVillagerData", at = @At("HEAD"), cancellable = true)
     private void totemVillagers$preserveAssignedSpecialist(VillagerData nextData, CallbackInfo callback) {
         Villager villager = (Villager) (Object) this;

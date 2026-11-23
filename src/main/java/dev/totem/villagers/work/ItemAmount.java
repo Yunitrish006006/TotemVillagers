@@ -4,6 +4,9 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import java.util.Objects;
+import java.util.Map;
+import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.regex.Pattern;
 
 /** A positive, namespaced item amount used by work-order input and output records. */
@@ -22,5 +25,13 @@ public record ItemAmount(String itemId, int count) {
         if (count < 1) {
             throw new IllegalArgumentException("count must be positive");
         }
+    }
+
+    public static Map<String, Integer> totals(List<ItemAmount> inputs) {
+        Map<String, Integer> result = new LinkedHashMap<>();
+        for (ItemAmount input : inputs) {
+            result.merge(input.itemId(), input.count(), Math::addExact);
+        }
+        return result;
     }
 }

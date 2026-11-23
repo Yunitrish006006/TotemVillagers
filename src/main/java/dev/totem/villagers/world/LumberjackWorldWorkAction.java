@@ -15,9 +15,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -41,6 +43,8 @@ public final class LumberjackWorldWorkAction {
     private static final double WORK_REACH_SQUARED = 16.0D;
     private static final TagKey<Block> LEAVES = TagKey.create(net.minecraft.core.registries.Registries.BLOCK,
             Identifier.fromNamespaceAndPath("totem", "lumberjack_tree_leaves"));
+    public static final TagKey<Item> TREE_FIBRES = TagKey.create(
+            net.minecraft.core.registries.Registries.ITEM, Identifier.fromNamespaceAndPath("totem", "lumberjack_tree_fibers"));
     private static final int CANOPY_RADIUS = 2;
     private static final int CANOPY_HEIGHT = 2;
     private static final int MIN_TRUNK_HEIGHT = 2;
@@ -72,11 +76,15 @@ public final class LumberjackWorldWorkAction {
                 || !replacement.defaultBlockState().canSurvive(level, base)) {
             return false;
         }
-        List<BlockPos> canopy = harvestableCanopy(level, lumberjack, zone, trunk.getLast());
+        List<BlockPos> canopy = zone.naturalTimber() ? List.of(trunk.getLast().above())
+                : harvestableCanopy(level, lumberjack, zone, trunk.getLast());
         List<BlockPos> harvestedBlocks = new ArrayList<>(trunk.size() + canopy.size());
         harvestedBlocks.addAll(trunk);
         harvestedBlocks.addAll(canopy);
         List<ItemStack> drops = actualDrops(level, lumberjack, harvestedBlocks, axe);
+        // The first household order pays for a plain oak log. Validate the real loot before felling.
+        if (zone.naturalTimber() && drops.stream().noneMatch(stack ->
+                ItemStack.isSameItemSameComponents(stack, new ItemStack(Items.OAK_LOG)))) return false;
         boolean rootedGeneratedPlot = isRenewableGeneratedLumberyardPlot(level, lumberjack, base);
         boolean replacementDropped = drops.stream().anyMatch(stack -> stack.is(replacement.asItem()));
         List<ItemStack> returns = new ArrayList<>(VillageProductionStockPolicy.boundedLumberjackReturns(
@@ -98,24 +106,26 @@ public final class LumberjackWorldWorkAction {
             reservation.rollback();
             return false;
         }
+        // Only an actually harvested canopy can supply a clipping. Preserve room for the axe and native drops.
+        if (!canopy.isEmpty()) addClipping(inventory, level.getBlockState(canopy.getFirst()), drops, returns);
         Map<BlockPos, BlockState> captured = new LinkedHashMap<>();
         for (BlockPos harvestedBlock : harvestedBlocks) {
             captured.put(harvestedBlock, level.getBlockState(harvestedBlock));
         }
         for (BlockPos harvestedBlock : harvestedBlocks) {
             if (!level.destroyBlock(harvestedBlock, false, lumberjack, 512)) {
-                restore(level, captured);
+                restore(level, captured, zone, base, trunk, canopy);
                 reservation.rollback();
                 return false;
             }
         }
         if (!level.setBlock(base, replacement.defaultBlockState(), 3)) {
-            restore(level, captured);
+            restore(level, captured, zone, base, trunk, canopy);
             reservation.rollback();
             return false;
         }
         if (!reservation.commitWithReturns(returns)) {
-            restore(level, captured);
+            restore(level, captured, zone, base, trunk, canopy);
             reservation.rollback();
             return false;
         }
@@ -125,7 +135,16 @@ public final class LumberjackWorldWorkAction {
     }
 
     /** Generated Lumberyards alone carry a persistent root stock; manual zones never receive free saplings. */
-    private static boolean isRenewableGeneratedLumberyardPlot(ServerLevel level, Villager lumberjack, BlockPos base) {
+    static void addClipping(VillagerWorkInventory inventory, BlockState foliage, List<ItemStack> drops, List<ItemStack> returns) {
+        var clipping = new ItemStack(foliage.getBlock().asItem());
+        if (clipping.is(TREE_FIBRES) && inventory.countMatchingItem(clipping) < 6
+                && drops.stream().noneMatch(stack -> stack.is(clipping.getItem()))) {
+            returns.add(clipping);
+            if (!inventory.canInsertAllExact(returns)) returns.removeLast();
+        }
+    }
+
+    public static boolean isRenewableGeneratedLumberyardPlot(ServerLevel level, Villager lumberjack, BlockPos base) {
         WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(level.getServer());
         Optional<java.util.UUID> zoneId = assignments.getAssignment(lumberjack.getUUID())
                 .filter(assignment -> "totem:lumberjack".equals(assignment.roleId()))
@@ -168,6 +187,24 @@ public final class LumberjackWorldWorkAction {
                 || (result.size() == MAX_TRUNK_HEIGHT && level.isLoaded(base.above(MAX_TRUNK_HEIGHT))
                 && level.getBlockState(base.above(MAX_TRUNK_HEIGHT)).is(logs))) {
             return null;
+        }
+        if (zone.naturalTimber()) {
+            if (!zone.ownerId().equals(lumberjack.getUUID()) || !NaturalOakTimber.recordedTree(level, base, result.size())) return null;
+            var crown = base.above(result.size());
+            if (!withinZone(level, zone, crown) || !level.getBlockState(crown).is(Blocks.OAK_LEAVES)) return null;
+            var zones = WorkerAssignmentSavedData.forServer(level.getServer());
+            var parcels = dev.totem.villagers.worker.ProductionParcel.get(level.getServer());
+            for (int y = -1; y <= result.size(); y++) {
+                var pos = base.above(y);
+                if (!WorldWorkPermissions.mayWork(level, lumberjack, pos) || zones.overlapsOtherZone(zone, pos)
+                        || parcels.heldByAnother(level, pos, lumberjack)) return null;
+                if (y >= 0 && y < result.size()) for (var side : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+                    var beside = pos.relative(side);
+                    if (!level.isLoaded(beside)) return null;
+                    var neighbor = level.getBlockState(beside);
+                    if (!neighbor.isAir() && !neighbor.is(LEAVES) && !neighbor.canBeReplaced()) return null;
+                }
+            }
         }
         return hasLeafCanopy(level, result.getLast()) ? List.copyOf(result) : null;
     }
@@ -252,7 +289,10 @@ public final class LumberjackWorldWorkAction {
         return -1;
     }
 
-    private static void restore(ServerLevel level, Map<BlockPos, BlockState> captured) {
+    private static void restore(ServerLevel level, Map<BlockPos, BlockState> captured, WorkZone zone, BlockPos base,
+                                List<BlockPos> trunk, List<BlockPos> canopy) {
         captured.forEach((position, state) -> level.setBlock(position, state, 3));
+        if (zone.naturalTimber() && captured.entrySet().stream().allMatch(e -> level.getBlockState(e.getKey()).equals(e.getValue())))
+            NaturalOakTimber.record(level.getChunkAt(base), base, java.util.Set.copyOf(trunk), java.util.Set.copyOf(canopy));
     }
 }

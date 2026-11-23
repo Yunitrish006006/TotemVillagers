@@ -61,6 +61,11 @@ public final class VillagerSpecialistProfessionRuntime {
                         || assignment.roleId().equals(professionId(villager))) {
                     continue;
                 }
+                if (assignment.automaticallyAssigned() && (assignment.roleId().equals("totem:miner") || assignment.roleId().equals("totem:lumberjack"))
+                        && !villager.getVillagerData().profession().is(VillagerProfession.NONE)) {
+                    WorkerAssignmentSavedData.forServer(server).removeAssignment(villager.getUUID());
+                    continue;
+                }
                 Identifier roleId = Identifier.tryParse(assignment.roleId());
                 VillagerProfession profession = roleId == null
                         ? null : BuiltInRegistries.VILLAGER_PROFESSION.getValue(roleId);

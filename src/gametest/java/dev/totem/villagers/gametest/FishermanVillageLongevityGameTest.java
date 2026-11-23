@@ -105,7 +105,7 @@ public final class FishermanVillageLongevityGameTest {
         Villager fisherman = spawn(helper, offsetY(new BlockPos(2, 3, 3), verticalOffset), "minecraft:fisherman");
         Villager toolsmith = spawn(helper, offsetY(new BlockPos(4, 3, 3), verticalOffset), "minecraft:toolsmith");
         Villager miner = spawn(helper, offsetY(new BlockPos(6, 3, 3), verticalOffset), "totem:miner");
-        Villager lumberjack = spawn(helper, offsetY(new BlockPos(4, 3, 6), verticalOffset), "totem:lumberjack");
+        Villager lumberjack = spawn(helper, offsetY(new BlockPos(3, 3, 4), verticalOffset), "totem:lumberjack");
         double minerHomeX = miner.getX();
         double minerHomeY = miner.getY();
         double minerHomeZ = miner.getZ();
@@ -527,6 +527,9 @@ public final class FishermanVillageLongevityGameTest {
         for (int x = 1; x <= 8; x++) {
             for (int z = 2; z <= 7; z++) {
                 helper.setBlock(offsetY(new BlockPos(x, 1, z), verticalOffset), Blocks.STONE);
+                for (int y = 2; y <= 5; y++) {
+                    helper.setBlock(offsetY(new BlockPos(x, y, z), verticalOffset), Blocks.AIR);
+                }
             }
         }
     }

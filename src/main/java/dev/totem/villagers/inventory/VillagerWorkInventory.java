@@ -25,13 +25,13 @@ public final class VillagerWorkInventory implements WorkInventory {
     @Override
     public boolean canReserveExact(List<ItemAmount> requiredInputs) {
         synchronized (savedData) {
-            return containsAll(savedData.copySlots(villagerId), aggregate(requiredInputs));
+            return containsAll(savedData.copySlots(villagerId), ItemAmount.totals(requiredInputs));
         }
     }
 
     @Override
     public Optional<Reservation> reserveExact(List<ItemAmount> requiredInputs) {
-        Map<String, Integer> required = aggregate(requiredInputs);
+        Map<String, Integer> required = ItemAmount.totals(requiredInputs);
         synchronized (savedData) {
             List<ItemStack> slots = savedData.copySlots(villagerId);
             if (!containsAll(slots, required)) {
@@ -86,7 +86,7 @@ public final class VillagerWorkInventory implements WorkInventory {
         if (requiredStack == null || requiredStack.isEmpty()) {
             return Optional.empty();
         }
-        Map<String, Integer> additional = aggregate(additionalInputs == null ? List.of() : additionalInputs);
+        Map<String, Integer> additional = ItemAmount.totals(additionalInputs == null ? List.of() : additionalInputs);
         synchronized (savedData) {
             List<ItemStack> slots = savedData.copySlots(villagerId);
             int available = slots.stream()
@@ -546,14 +546,6 @@ public final class VillagerWorkInventory implements WorkInventory {
             }
         }
         return true;
-    }
-
-    private static Map<String, Integer> aggregate(List<ItemAmount> inputs) {
-        Map<String, Integer> result = new LinkedHashMap<>();
-        for (ItemAmount input : inputs) {
-            result.merge(input.itemId(), input.count(), Math::addExact);
-        }
-        return result;
     }
 
     private static String itemId(ItemStack stack) {

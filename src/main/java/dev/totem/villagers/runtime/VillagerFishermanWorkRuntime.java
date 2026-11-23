@@ -1,5 +1,7 @@
 package dev.totem.villagers.runtime;
 
+import dev.totem.villagers.worker.ProductionParcel;
+
 import dev.totem.villagers.config.WorkBackedTradingMode;
 import dev.totem.villagers.config.WorkBackedTradingSettingsSavedData;
 import dev.totem.villagers.inventory.VillagerWorkInventory;
@@ -27,18 +29,15 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.MerchantOffers;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
@@ -57,8 +56,6 @@ public final class VillagerFishermanWorkRuntime {
     private static final int FISH_RADIUS = 24;
     private static final int MAX_WATER_CHECKS = 384;
     private static final double FISH_REACH_SQUARED = 16.0D;
-    private static final TagKey<Block> FISHING_WATER = TagKey.create(Registries.BLOCK,
-            Identifier.fromNamespaceAndPath("totem", "fishing_water"));
     private static final VillagerWorkScheduler SCHEDULER = new VillagerWorkScheduler();
     private static final FishermanWorldWorkAction ACTION = new FishermanWorldWorkAction();
 
@@ -119,6 +116,20 @@ public final class VillagerFishermanWorkRuntime {
             return;
         }
         Optional<FishermanContext> context = resolveContext(level, fisherman);
+        if (!fisherman.isSleeping() && !inDanger(fisherman)) {
+            if (context.isEmpty()) {
+                var site = fisherman.getBrain().getMemory(MemoryModuleType.JOB_SITE).orElse(null);
+                if (site == null || site.dimension().equals(level.dimension()) && level.isLoaded(site.pos())) {
+                    VillagerHeadStatus.report(fisherman, site != null && level.getBlockState(site.pos()).is(Blocks.BARREL)
+                            ? VillagerHeadStatus.Kind.CAMPFIRE : VillagerHeadStatus.Kind.BARREL);
+                }
+            } else {
+                VillagerHeadStatus.clear(fisherman, VillagerHeadStatus.Kind.CAMPFIRE, VillagerHeadStatus.Kind.BARREL);
+                if (dev.totem.villagers.world.FishingRodUse.nextForWork(inventory.snapshot()).isEmpty())
+                    VillagerHeadStatus.report(fisherman, VillagerHeadStatus.Kind.ROD);
+                else VillagerHeadStatus.clear(fisherman, VillagerHeadStatus.Kind.ROD);
+            }
+        }
         List<WorkCandidate> candidates = context.map(value -> candidates(level, fisherman, state, value, catalog, inventory)).orElseGet(List::of);
         Optional<BlockPos> activeWater = state.activeWork().flatMap(active -> active.worldTarget())
                 .flatMap(WorldWorkTarget::packedBlockPosition).map(BlockPos::of);
@@ -200,6 +211,7 @@ public final class VillagerFishermanWorkRuntime {
         WorkInventory.Reservation reservation = null;
         boolean completedOrder = false;
         boolean cookedCatch = false;
+        boolean edibleCatch = false;
         boolean consumedNewCoal = false;
         try {
             List<ItemStack> returned = new ArrayList<>();
@@ -242,6 +254,7 @@ public final class VillagerFishermanWorkRuntime {
                             ? "campfire fuel unavailable" : "usable fishing rod unavailable");
                 }
             }
+            edibleCatch = returned.stream().anyMatch(s -> dev.totem.villagers.needs.VillagerNutrition.nutrition(s) > 0);
             ItemStack wornRod = FishingRodUse.wearOnce(rod);
             if (!wornRod.isEmpty()) {
                 returned.add(wornRod);
@@ -260,6 +273,7 @@ public final class VillagerFishermanWorkRuntime {
                 .consumeCooking(fisherman.getUUID(), consumedNewCoal)) {
             throw new IllegalStateException("Committed cooked fish without a Campfire fuel charge");
         }
+        if (edibleCatch) VillageFoodForecast.delivered(level, fisherman);
         if (!completedOrder) {
             return failed(state, order, "fishing bycatch stored");
         }
@@ -298,15 +312,26 @@ public final class VillagerFishermanWorkRuntime {
                 .map(campfire -> new FishermanContext(jobSite, campfire));
     }
 
+    static boolean hasViableFishingParcel(ServerLevel level, Villager fisherman, ProductionParcel.Claim claim, VillagerWorkInventory stock) {
+        if (resolveContext(level, fisherman).isEmpty() || FishingRodUse.nextForWork(stock.snapshot()).isEmpty()) return false;
+        if (FishermanCampfireFuelSavedData.forServer(level.getServer()).remainingCookings(fisherman.getUUID()) < 1
+                && carriedCampfireFuel(stock) == null) return false;
+        return claim.cells().stream().anyMatch(water -> ProductionParcel.availableCell(level, fisherman, water, false)
+                && level.getBlockState(water.above()).isAir()
+                && castingPosition(level, fisherman, water).isPresent());
+    }
+
     private static boolean validWaterTarget(ServerLevel level, Villager fisherman, FishermanContext context,
                                             BlockPos water, WorkOrder order, boolean requireCastingPath) {
         return "totem:fishing_water".equals(order.worldTargetTag())
                 && level.isLoaded(water)
-                && level.getBlockState(water).is(FISHING_WATER)
+                && level.getBlockState(water).is(ProductionParcel.FISHING_WATER)
                 && level.getBlockState(water.above()).isAir()
                 && water.distSqr(context.jobSite().pos()) <= (double) FISH_RADIUS * FISH_RADIUS
                 && WorldWorkPermissions.mayWork(level, fisherman, water)
-                && (!requireCastingPath || castingPosition(level, fisherman, water).isPresent());
+                && (!requireCastingPath || castingPosition(level, fisherman, water).isPresent())
+                && ProductionParcel.get(level.getServer())
+                    .acquire(level, fisherman, context.jobSite(), water, false);
     }
 
     private static Optional<BlockPos> findWater(ServerLevel level, Villager fisherman, BlockPos jobSite) {
@@ -319,8 +344,10 @@ public final class VillagerFishermanWorkRuntime {
                     for (int y = jobSite.getY() - 4; y <= jobSite.getY() + 2 && checks < MAX_WATER_CHECKS; y++) {
                         BlockPos water = new BlockPos(x, y, z);
                         checks++;
-                        if (level.isLoaded(water) && level.getBlockState(water).is(FISHING_WATER)
-                                && level.getBlockState(water.above()).isAir() && castingPosition(level, fisherman, water).isPresent()) {
+                        if (level.isLoaded(water) && level.getBlockState(water).is(ProductionParcel.FISHING_WATER)
+                                && level.getBlockState(water.above()).isAir() && castingPosition(level, fisherman, water).isPresent()
+                                && ProductionParcel.get(level.getServer()).acquire(level, fisherman,
+                                        GlobalPos.of(level.dimension(), jobSite), water, false)) {
                             return Optional.of(water);
                         }
                     }
@@ -338,7 +365,11 @@ public final class VillagerFishermanWorkRuntime {
                 .filter(position -> position.getX() != water.getX() || position.getZ() != water.getZ())
                 .filter(position -> level.isLoaded(position) && level.getBlockState(position).isAir()
                         && level.getBlockState(position.below()).isFaceSturdy(level, position.below(), net.minecraft.core.Direction.UP))
-                .filter(position -> fisherman.getNavigation().createPath(position, 0) != null)
+                .filter(position -> {
+                    if (position.equals(fisherman.blockPosition())) return true;
+                    var path = fisherman.getNavigation().createPath(position, 0);
+                    return path != null && path.canReach();
+                })
                 .min(Comparator.comparingDouble((BlockPos position) -> fisherman.distanceToSqr(Vec3.atCenterOf(position))));
     }
 

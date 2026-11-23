@@ -14,6 +14,7 @@ import dev.totem.villagers.schedule.WorkshopCandidatePlanner;
 import dev.totem.villagers.trade.VillagerTradeStockAuthority;
 import dev.totem.villagers.trade.VillagerOfferSides;
 import dev.totem.villagers.work.FarmerSuspiciousStewOrders;
+import dev.totem.villagers.work.ItemAmount;
 import dev.totem.villagers.work.FletcherTippedArrowOrders;
 import dev.totem.villagers.work.StockVariantKey;
 import dev.totem.villagers.work.LeatherworkerDyedArmorOrders;
@@ -49,6 +50,8 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Server-tick bridge for workshop work. Only loaded villagers at their native job
@@ -110,46 +113,56 @@ public final class VillagerWorkshopRuntime {
             return active != null && isLiveWorkshopOrder(active, level, villager, context, liveOffers)
                     ? Optional.of(active) : Optional.empty();
         }
+        Map<String, Integer> stock = new HashMap<>();
+        for (var stack : context.inventory().snapshot()) {
+            if (!stack.isEmpty()) stock.merge(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount(), Integer::sum);
+        }
         return catalog.snapshot().values().stream()
                 .filter(order -> order.professionId().equals(professionId))
                 .filter(order -> order.allowedSources().contains(WorkSource.WORKSHOP))
                 .filter(order -> stockNeedsWork(context.inventory(), order, liveOffers, level))
                 .filter(order -> isLiveWorkshopOrder(order, level, villager, context, liveOffers))
-                .filter(order -> missingMaterialUnits(context.inventory(), order) > 0)
-                .sorted(java.util.Comparator
-                        .comparingInt((WorkOrder order) -> missingMaterialTypes(context.inventory(), order))
-                        .thenComparingInt(order -> -availableMaterialTypes(context.inventory(), order))
-                        .thenComparingInt(order -> missingMaterialUnits(context.inventory(), order))
-                        .thenComparing(WorkOrder::id))
-                .findFirst();
+                .map(order -> MaterialGap.forOrder(order, stock, context.inventory(), liveOffers, level))
+                .filter(gap -> gap.missingUnits() > 0)
+                .min(java.util.Comparator.comparingInt(MaterialGap::missingTypes)
+                        .thenComparingInt(gap -> -gap.suppliedTypes())
+                        .thenComparingLong(MaterialGap::missingUnits)
+                        .thenComparing(gap -> gap.order().id()))
+                .map(MaterialGap::order);
     }
 
-    /** Prefer work that already has the greatest variety of its recipe inputs on hand. */
-    private static int missingMaterialTypes(VillagerWorkInventory inventory, WorkOrder order) {
-        return (int) order.requiredInputs().stream()
-                .filter(input -> availableUnits(inventory, input.itemId()) < input.count())
-                .count();
+    static Map<String, ItemStack> exactIngredients(WorkOrder order, MerchantOffers offers, ServerLevel level) {
+        if (FletcherTippedArrowOrders.isOfferBoundTippedArrowOrder(order)) {
+            var potion = FletcherTippedArrowOrders.potionForOrder(order, offers, level);
+            return potion == null ? Map.of() : Map.of("minecraft:lingering_potion", potion);
+        }
+        if (RemnantBackpackOrders.isBackpackOrder(order)) {
+            var inputs = new HashMap<String, ItemStack>();
+            RemnantBackpackOrders.pristineSmithingStacks(order).ifPresent(stacks -> {
+                for (var stack : stacks) inputs.put(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack);
+            });
+            return inputs;
+        }
+        return Map.of();
     }
 
-    private static int availableMaterialTypes(VillagerWorkInventory inventory, WorkOrder order) {
-        return (int) order.requiredInputs().stream()
-                .filter(input -> availableUnits(inventory, input.itemId()) >= input.count())
-                .count();
-    }
-
-    /** Break equal recipe-coverage ties by the smallest remaining number of units. */
-    private static int missingMaterialUnits(VillagerWorkInventory inventory, WorkOrder order) {
-        return order.requiredInputs().stream()
-                .mapToInt(input -> Math.max(0, input.count() - availableUnits(inventory, input.itemId())))
-                .sum();
-    }
-
-    private static int availableUnits(VillagerWorkInventory inventory, String itemId) {
-        return inventory.snapshot().stream()
-                .filter(stack -> !stack.isEmpty())
-                .filter(stack -> itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))
-                .mapToInt(ItemStack::getCount)
-                .sum();
+    private record MaterialGap(WorkOrder order, int missingTypes, int suppliedTypes, long missingUnits) {
+        static MaterialGap forOrder(WorkOrder order, Map<String, Integer> stock, VillagerWorkInventory inventory, MerchantOffers offers, ServerLevel level) {
+            var ingredients = ItemAmount.totals(order.requiredInputs());
+            int types = 0;
+            long units = 0;
+            var exact = exactIngredients(order, offers, level);
+            for (var input : ingredients.entrySet()) {
+                int held = exact.containsKey(input.getKey()) ? inventory.countMatchingItem(exact.get(input.getKey()))
+                        : stock.getOrDefault(input.getKey(), 0);
+                int missing = input.getValue() - held;
+                if (missing > 0) {
+                    types++;
+                    units += missing;
+                }
+            }
+            return new MaterialGap(order, types, ingredients.size() - types, units);
+        }
     }
 
     private static void tick(MinecraftServer server) {
@@ -183,6 +196,7 @@ public final class VillagerWorkshopRuntime {
             VillagerWorkInventorySavedData inventories,
             boolean forceIdleScan
     ) {
+        if (ButcherRationOrders.reservedForSmoking(level, villager)) return;
         String professionId = professionId(villager);
         boolean leatherworker = "minecraft:leatherworker".equals(professionId);
         boolean farmer = "minecraft:farmer".equals(professionId);
@@ -291,6 +305,9 @@ public final class VillagerWorkshopRuntime {
                     completed -> producedOfferStack(completed, offers, level));
         }
         if (result == WorkshopCommitResult.COMPLETED) {
+            if ((order.professionId().equals("minecraft:farmer") || order.professionId().equals("minecraft:fisherman"))
+                    && dev.totem.villagers.needs.VillagerNutrition.nutrition(producedOfferStack(order, offers, level)) > 0)
+                VillageFoodForecast.delivered(level, villager);
             TradeDiagnostic completed = new TradeDiagnostic(order.id(), WorkSource.WORKSHOP, order.workTicks(), "");
             return state.withActiveWork(Optional.empty(), Optional.of(completed));
         }

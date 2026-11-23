@@ -88,6 +88,12 @@ jobs:
           ./gradlew -PtotemCoreJar="$CORE_JAR" -PtotemRemnantJar="$REMNANT_JAR" \
             runGameTest --no-daemon --stacktrace
 
+      - name: Verify personal resource parcels across two restarts
+        run: scripts/test-resource-parcel-restart.sh -PtotemCoreJar="$CORE_JAR" -PtotemRemnantJar="$REMNANT_JAR"
+
+      - name: Verify head status on two rendering clients
+        run: python3 scripts/test-head-status-tracking.py -PtotemCoreJar="$CORE_JAR" -PtotemRemnantJar="$REMNANT_JAR"
+
       - name: Bind validated release artifact to this Build
         shell: bash
         run: |

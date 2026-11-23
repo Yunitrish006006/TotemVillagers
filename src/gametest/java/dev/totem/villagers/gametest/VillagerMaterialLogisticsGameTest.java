@@ -39,7 +39,8 @@ public final class VillagerMaterialLogisticsGameTest {
         BlockPos jobSite = helper.absolutePos(relativeJobSite);
         helper.setBlock(relativeJobSite, Blocks.COMPOSTER);
         Villager baker = spawnVillager(helper, relativeJobSite.above(), "minecraft:farmer");
-        Villager grower = spawnVillager(helper, relativeJobSite.above().east(), "minecraft:unemployed");
+        Villager grower = spawnVillager(helper, relativeJobSite.above().east(3), "minecraft:unemployed");
+        Villager full = spawnVillager(helper, relativeJobSite.above().east(), "minecraft:unemployed");
         try {
             baker.getBrain().setMemory(MemoryModuleType.JOB_SITE, GlobalPos.of(helper.getLevel().dimension(), jobSite));
             VillagerNutrition.setFoodLevel(baker, 20);
@@ -54,10 +55,23 @@ public final class VillagerMaterialLogisticsGameTest {
                     "Could not seed the nearby grower's physical wheat");
             require(helper, bakerInventory.insertExact(new ItemStack(Items.EMERALD)), "Could not fund material buyer");
 
+            var fullStock = VillagerWorkInventorySavedData.forServer(server).inventory(full.getUUID());
+            VillagerNutrition.setFoodLevel(full, 20);
+            require(helper, fullStock.insertExact(new ItemStack(Items.WHEAT, 64)), "Full supplier missing wheat");
+            while (fullStock.insertExact(new ItemStack(Items.COBBLESTONE, 64))) {
+                // Fill every other slot so the nearer supplier cannot receive an emerald.
+            }
             settings.setMode(WorkBackedTradingMode.ENFORCED);
+            baker.setTradingPlayer(helper.makeMockServerPlayerInLevel());
+            VillagerMaterialLogisticsRuntime.tickForGameTest(server);
+            require(helper, count(bakerInventory, Items.WHEAT) == 0 && count(bakerInventory, Items.EMERALD) == 1,
+                    "A worker purchased workshop materials while trading with a player");
+            baker.setTradingPlayer(null);
             VillagerMaterialLogisticsRuntime.tickForGameTest(server);
             require(helper, count(bakerInventory, Items.WHEAT) == 3,
                     "Village logistics did not deliver the Farmer's exact live-recipe wheat inputs");
+            require(helper, count(fullStock, Items.WHEAT) == 64 && count(fullStock, Items.EMERALD) == 0,
+                    "Closest supplier lost goods despite having no room for payment");
             require(helper, count(growerInventory, Items.WHEAT) == 0,
                     "Village logistics duplicated or retained delivered wheat at its source");
             require(helper, count(bakerInventory, Items.EMERALD) == 0 && count(growerInventory, Items.EMERALD) == 1,
@@ -83,6 +97,8 @@ public final class VillagerMaterialLogisticsGameTest {
             inventories.drain(grower.getUUID());
             baker.discard();
             grower.discard();
+            inventories.drain(full.getUUID());
+            full.discard();
         }
     }
 
@@ -124,6 +140,60 @@ public final class VillagerMaterialLogisticsGameTest {
             inventories.drain(supplier.getUUID());
             recipient.discard();
             supplier.discard();
+        }
+    }
+
+    @GameTest(maxTicks = 40)
+    public void fletcherBuysOnlyTheOfferedPotionAndSupplierKeepsItsOwnVariant(GameTestHelper h) {
+        var level = h.getLevel();
+        var server = level.getServer();
+        var settings = WorkBackedTradingSettingsSavedData.forServer(server);
+        var previous = settings.settings().mode();
+        var a = new BlockPos(3,2,3);
+        var b = a.east(2);
+        h.setBlock(a, Blocks.FLETCHING_TABLE);
+        h.setBlock(b, Blocks.FLETCHING_TABLE);
+        var buyer = spawnVillager(h,a.above(),"minecraft:fletcher");
+        var seller = spawnVillager(h,b.above(),"minecraft:fletcher");
+        try {
+            for (var worker : java.util.List.of(buyer,seller)) {
+                worker.getBrain().setMemory(MemoryModuleType.JOB_SITE,GlobalPos.of(level.dimension(),h.absolutePos(worker == buyer ? a : b)));
+                var offers = worker.getOffers();
+                offers.clear();
+                var desired = worker == buyer ? net.minecraft.world.item.alchemy.Potions.SWIFTNESS : net.minecraft.world.item.alchemy.Potions.SLOWNESS;
+                offers.add(new MerchantOffer(new ItemCost(Items.EMERALD,5),
+                        net.minecraft.world.item.alchemy.PotionContents.createItemStack(Items.TIPPED_ARROW,desired).copyWithCount(5),12,1,.05F));
+                if (worker == buyer) offers.add(new MerchantOffer(new ItemCost(Items.LINGERING_POTION),new ItemStack(Items.EMERALD),12,1,.05F));
+            }
+            var accounts = VillagerWorkInventorySavedData.forServer(server);
+            var wallet = accounts.inventory(buyer.getUUID());
+            var stock = accounts.inventory(seller.getUUID());
+            var wanted = net.minecraft.world.item.alchemy.PotionContents.createItemStack(Items.LINGERING_POTION,net.minecraft.world.item.alchemy.Potions.SWIFTNESS);
+            var other = net.minecraft.world.item.alchemy.PotionContents.createItemStack(Items.LINGERING_POTION,net.minecraft.world.item.alchemy.Potions.SLOWNESS);
+            wallet.insertExact(new ItemStack(Items.ARROW,8));
+            wallet.insertExact(new ItemStack(Items.EMERALD));
+            wallet.insertExact(other.copy());
+            stock.insertExact(wanted.copy());
+            buyer.getOffers().removeLast();
+            var slowOnly = new ItemCost(Items.LINGERING_POTION).withComponents(builder -> builder.expect(
+                    net.minecraft.core.component.DataComponents.POTION_CONTENTS, other.get(net.minecraft.core.component.DataComponents.POTION_CONTENTS)));
+            buyer.getOffers().add(new MerchantOffer(slowOnly,new ItemStack(Items.EMERALD),12,1,.05F));
+            settings.setMode(WorkBackedTradingMode.ENFORCED);
+            VillagerMaterialLogisticsRuntime.tickForGameTest(server);
+            require(h, stock.countMatchingItem(wanted) == 1 && wallet.countMatchingItem(new ItemStack(Items.EMERALD)) == 1,
+                    "Used a slowness-only price for a swiftness purchase");
+            buyer.getOffers().removeLast();
+            buyer.getOffers().add(new MerchantOffer(new ItemCost(Items.LINGERING_POTION),new ItemStack(Items.EMERALD),12,1,.05F));
+            settings.setMode(WorkBackedTradingMode.ENFORCED);
+            VillagerMaterialLogisticsRuntime.tickForGameTest(server);
+            require(h,wallet.countMatchingItem(wanted) == 1 && wallet.countMatchingItem(other) == 1
+                    && stock.countMatchingItem(wanted) == 0 && stock.countMatchingItem(new ItemStack(Items.EMERALD)) == 1,
+                    "Fletcher mistook one potion variant for another when buying or reserving stock");
+            h.succeed();
+        } finally {
+            settings.setMode(previous);
+            buyer.discard();
+            seller.discard();
         }
     }
 

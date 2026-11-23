@@ -33,7 +33,7 @@ import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.entity.EntityTypeTest;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.LinkedHashMap;
@@ -57,11 +57,18 @@ public final class GuardConstructionRuntime {
     private static final double GOLEM_MATCH_RADIUS_SQUARED = 36.0D;
     private static final GuardDefencePlanner PLANNER = new GuardDefencePlanner();
 
+    private record Observation(long chunk, long time) {}
+    private static final Map<ServerLevel, Map<UUID, Observation>> OBSERVED = new java.util.WeakHashMap<>();
+
     private GuardConstructionRuntime() {
     }
 
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(GuardConstructionRuntime::tick);
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> {
+            var seen = OBSERVED.get(level);
+            if (seen != null) seen.values().removeIf(o -> o.chunk() == chunk.getPos().pack());
+        });
     }
 
     private static void tick(MinecraftServer server) {
@@ -86,7 +93,13 @@ public final class GuardConstructionRuntime {
         ManagedVillageSavedData villages = ManagedVillageSavedData.forServer(server);
         VillagerWorkInventorySavedData inventories = VillagerWorkInventorySavedData.forServer(server);
         WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(server);
-        for (ManagedVillageState persisted : villages.snapshot().values()) {
+        if (schedulerTick % 100 == 0) {
+            for (var level : server.getAllLevels()) recruit(level, villages, inventories, assignments, level.getGameTime());
+        }
+        var posts = villages.snapshot().values();
+        Set<UUID> managed = new LinkedHashSet<>();
+        posts.forEach(village -> managed.addAll(village.managedGolemIds()));
+        for (ManagedVillageState persisted : posts) {
             PostContext post = resolvePost(server, persisted.post(), persisted.guardVillagerId(), inventories);
             GuardDefenceOrder reservedOrder = persisted.construction()
                     .flatMap(construction -> GuardDefenceOrderDefinitions.get(construction.orderId())).orElse(null);
@@ -106,8 +119,9 @@ public final class GuardConstructionRuntime {
             // Guard's current stamina. A hungry Guard must stop constructing,
             // but that must not briefly re-enable vanilla automatic spawning.
             ManagedVillageState current = pruneManagedGolems(persisted, post.level());
-            current = recoverCompletedConstruction(current, post);
-            suppressAutomaticGolems(current, post);
+            current = recoverCompletedConstruction(current, post, managed);
+            managed.addAll(current.managedGolemIds());
+            suppressAutomaticGolems(managed, post);
             if (!current.equals(persisted)) {
                 persist(villages, current);
             }
@@ -139,6 +153,88 @@ public final class GuardConstructionRuntime {
             ManagedVillageState next = advanceConstruction(current, guard, post, order, schedulerTick, bypassNavigationForTest);
             if (!next.equals(current)) {
                 persist(villages, next);
+                managed.addAll(next.managedGolemIds());
+            }
+        }
+    }
+
+    static void recruit(ServerLevel level, ManagedVillageSavedData villages, VillagerWorkInventorySavedData inventories,
+                        WorkerAssignmentSavedData assignments, long now) {
+        var vacancies = villages.vacancies();
+        var seen = OBSERVED.computeIfAbsent(level, k -> new LinkedHashMap<>());
+        seen.keySet().removeIf(id -> villages.vacancy(id).isEmpty());
+        for (var vacancy : vacancies) {
+            var post = vacancy.post();
+            if (!post.dimensionId().equals(level.dimension().identifier().toString())) continue;
+            var pad = BlockPos.of(post.packedConstructionPad());
+            if (!level.isLoaded(pad)) {
+                seen.remove(post.villageId());
+                continue;
+            }
+            var last = seen.put(post.villageId(), new Observation(net.minecraft.world.level.ChunkPos.pack(pad), now));
+            if (defenceDemand(level, pad) <= golemsWithin(level, pad, VILLAGE_RADIUS).size()) {
+                villages.observe(vacancy, 0);
+                continue;
+            }
+            int elapsed = last != null && now - last.time() == 100 ? 100 : 0;
+            if (vacancy.ticks() < ManagedVillageSavedData.Vacancy.WAIT) {
+                villages.observe(vacancy, vacancy.ticks() + elapsed);
+                if (vacancy.ticks() + elapsed < ManagedVillageSavedData.Vacancy.WAIT) continue;
+                vacancy = villages.vacancy(post.villageId()).orElseThrow();
+            }
+            var center = net.minecraft.core.GlobalPos.of(level.dimension(), pad);
+            var residents = level.getEntitiesOfClass(Villager.class, new net.minecraft.world.phys.AABB(pad).inflate(32),
+                    v -> VillageWorkshopApprenticeship.belongsToVillage(level, v, center));
+            residents.sort(java.util.Comparator.comparing((Villager v) -> assignments.getAssignment(v.getUUID()).isPresent())
+                    .thenComparingDouble(v -> v.distanceToSqr(Vec3.atCenterOf(pad))));
+            if (!VillageFoodForecast.coversNextMeal(level, residents, inventories)) continue;
+            var order = GuardDefenceOrderDefinitions.get(GuardDefenceOrder.VANILLA_IRON_GOLEM.id()).orElse(null);
+            if (order == null) continue;
+            for (var candidate : residents) {
+                var stock = inventories.inventory(candidate.getUUID());
+                if (!VillagerCareerHistory.mayChange(candidate) || !VillageWorkshopApprenticeship.available(level, candidate)
+                        || !VillagerWorkNeeds.canWork(candidate) || !stock.canReserveExact(order.requiredInputs())
+                        || candidate.getBrain().hasMemoryValue(net.minecraft.world.entity.ai.memory.MemoryModuleType.POTENTIAL_JOB_SITE)) continue;
+                var source = switch (professionId(candidate)) {
+                    case "totem:miner" -> VillageWorkshopApprenticeship.SourceCareer.MINER;
+                    case "totem:lumberjack" -> VillageWorkshopApprenticeship.SourceCareer.LUMBERJACK;
+                    default -> VillageWorkshopApprenticeship.SourceCareer.UNEMPLOYED;
+                };
+                var assigned = assignments.getAssignment(candidate.getUUID()).orElse(null);
+                if (assigned != null && !VillagerBuilderRuntime.servesWorksite(level, assigned, post.ownerId(), post.dimensionId(), pad, assignments)
+                        || !VillageWorkshopApprenticeship.canLeave(level, candidate, residents, assignments, source, post.ownerId(), pad)) continue;
+                var context = new PostContext(level, pad, stock);
+                if (!isClearConstructionPad(context, candidate, order) || order.placements().stream().anyMatch(p ->
+                        !WorldWorkPermissions.mayUseHouseholdLand(level, candidate, placementPosition(pad, p)))) continue;
+                if (!withinWorkReach(level, candidate, pad)) {
+                    var path = candidate.getNavigation().createPath(pad, 1);
+                    if (path != null && path.canReach() && candidate.getNavigation().moveTo(path, .5)) break;
+                    continue;
+                }
+                var village = new ManagedVillageState(post, candidate.getUUID(), Set.of(), Optional.empty());
+                var construction = PLANNER.beginIfNeeded(village, defenceDemand(level, pad), order);
+                if (construction.isEmpty()) continue;
+                var reservation = stock.reserveExact(order.requiredInputs()).orElse(null);
+                if (reservation == null) continue;
+                if (!villages.staff(vacancy, village.withConstruction(construction))) {
+                    reservation.rollback();
+                    break;
+                }
+                reservation.commit();
+                if (candidate.getBrain().hasMemoryValue(net.minecraft.world.entity.ai.memory.MemoryModuleType.JOB_SITE)) {
+                    candidate.releasePoi(net.minecraft.world.entity.ai.memory.MemoryModuleType.JOB_SITE);
+                    candidate.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.JOB_SITE);
+                }
+                assignments.putAssignment(new dev.totem.villagers.worker.WorkerAssignment(candidate.getUUID(), "totem:guard",
+                        Optional.empty(), Optional.of(post.villageId()), true));
+                var role = BuiltInRegistries.VILLAGER_PROFESSION.getValue(Identifier.parse("totem:guard"));
+                candidate.setVillagerData(candidate.getVillagerData().withProfession(BuiltInRegistries.VILLAGER_PROFESSION.wrapAsHolder(role)));
+                candidate.setVillagerDataFinalized(true);
+                candidate.refreshBrain(level);
+                VillagerStarterSupplySavedData.forServer(level.getServer()).markProfessionKit(candidate.getUUID());
+                VillagerCareerHistory.appointed(candidate);
+                seen.remove(post.villageId());
+                break;
             }
         }
     }
@@ -178,7 +274,7 @@ public final class GuardConstructionRuntime {
                 || !WorldWorkPermissions.mayWork(post.level(), guard, target)) {
             return cancel(village, order, post);
         }
-        if (!bypassNavigationForTest && guard.distanceToSqr(Vec3.atCenterOf(post.pad())) > CONSTRUCTION_REACH_SQUARED) {
+        if (!bypassNavigationForTest && !withinWorkReach(post.level(), guard, post.pad())) {
             guard.getNavigation().moveTo(post.pad().getX() + .5D, post.pad().getY(), post.pad().getZ() + .5D, .5D);
             return village;
         }
@@ -207,7 +303,7 @@ public final class GuardConstructionRuntime {
         return rollbackEntireConstruction(village, order, post);
     }
 
-    private static ManagedVillageState recoverCompletedConstruction(ManagedVillageState village, PostContext post) {
+    private static ManagedVillageState recoverCompletedConstruction(ManagedVillageState village, PostContext post, Set<UUID> managed) {
         GuardConstructionState construction = village.construction().orElse(null);
         if (construction == null) {
             return village;
@@ -217,7 +313,7 @@ public final class GuardConstructionRuntime {
             return village;
         }
         IronGolem created = nearbyGolems(post.level(), post.pad()).stream()
-                .filter(golem -> !village.managedGolemIds().contains(golem.getUUID())).findFirst().orElse(null);
+                .filter(golem -> !managed.contains(golem.getUUID())).findFirst().orElse(null);
         return created == null ? village : PLANNER.recordManagedGolem(village, created.getUUID());
     }
 
@@ -296,12 +392,20 @@ public final class GuardConstructionRuntime {
         return true;
     }
 
+    private static boolean withinWorkReach(ServerLevel level, Villager guard, BlockPos pad) {
+        var center = Vec3.atCenterOf(pad);
+        if (guard.distanceToSqr(center) > CONSTRUCTION_REACH_SQUARED) return false;
+        var ray = level.clip(new net.minecraft.world.level.ClipContext(guard.getEyePosition(), center,
+                net.minecraft.world.level.ClipContext.Block.COLLIDER, net.minecraft.world.level.ClipContext.Fluid.NONE, guard));
+        return ray.getType() == net.minecraft.world.phys.HitResult.Type.MISS || ray.getBlockPos().equals(pad);
+    }
+
     private static int defenceDemand(ServerLevel level, BlockPos pad) {
         int residents = (int) LoadedVillagerCache.loaded(level).stream()
                 .filter(villager -> villager.isAlive()
                         && villager.distanceToSqr(Vec3.atCenterOf(pad)) <= (double) VILLAGE_RADIUS * VILLAGE_RADIUS)
                 .count();
-        int threats = level.getEntities(EntityTypeTest.forClass(Monster.class), monster -> monster.isAlive()
+        int threats = level.getEntitiesOfClass(Monster.class, new AABB(pad).inflate(THREAT_RADIUS), monster -> monster.isAlive()
                 && monster.distanceToSqr(Vec3.atCenterOf(pad)) <= (double) THREAT_RADIUS * THREAT_RADIUS).size();
         return GuardDefenceDemand.fromCounts(residents, threats).targetGolems();
     }
@@ -318,9 +422,9 @@ public final class GuardConstructionRuntime {
     }
 
     /** Removes only vanilla-created golems at this explicitly managed Guard Post; player-built golems remain untouched. */
-    private static void suppressAutomaticGolems(ManagedVillageState village, PostContext post) {
+    private static void suppressAutomaticGolems(Set<UUID> managed, PostContext post) {
         for (IronGolem golem : golemsWithin(post.level(), post.pad(), VILLAGE_RADIUS)) {
-            if (!golem.isPlayerCreated() && !village.managedGolemIds().contains(golem.getUUID())) {
+            if (!golem.isPlayerCreated() && !managed.contains(golem.getUUID())) {
                 golem.discard();
             }
         }
@@ -331,9 +435,8 @@ public final class GuardConstructionRuntime {
     }
 
     private static List<IronGolem> golemsWithin(ServerLevel level, BlockPos pad, double radius) {
-        return level.getEntities(EntityTypeTest.forClass(IronGolem.class), golem -> golem.isAlive()
-                        && golem.distanceToSqr(Vec3.atCenterOf(pad)) <= radius * radius)
-                .stream().map(IronGolem.class::cast).toList();
+        return level.getEntitiesOfClass(IronGolem.class, new AABB(pad).inflate(radius), golem -> golem.isAlive()
+                        && golem.distanceToSqr(Vec3.atCenterOf(pad)) <= radius * radius);
     }
 
     private static PostContext resolvePost(MinecraftServer server, GuardPost post, UUID guardId,

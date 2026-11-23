@@ -45,6 +45,7 @@ abstract class VillagerRendererWorkToolMixin {
     private void totemVillagers$addWorkTool(Villager villager, VillagerRenderState state,
                                              float tickProgress, CallbackInfo callback) {
         VillagerWorkAnimationRenderState extra = (VillagerWorkAnimationRenderState) state;
+        extra.totemVillagers$setStatus(statusLabel(villager));
         extra.totemVillagers$rightHandItem().clear();
         extra.totemVillagers$leftHandItem().clear();
         float workProgress = villager.getSwingAnimation(tickProgress);
@@ -97,6 +98,47 @@ abstract class VillagerRendererWorkToolMixin {
         }
         // Prevent the original CrossedArmsItemLayer from drawing the same stack again.
         state.heldItem.clear();
+    }
+
+    private static net.minecraft.network.chat.Component statusLabel(Villager villager) {
+        var display = dev.totem.villagers.runtime.VillagerHeadStatus.display(villager);
+        var client = net.minecraft.client.Minecraft.getInstance();
+        var player = client.player;
+        if (display == null || player == null || client.gui.hud.isHidden() || villager.isBaby()
+                || villager.isInvisibleTo(player) || player.distanceToSqr(villager) > 24 * 24
+                || !player.hasLineOfSight(villager)) return null;
+        var status = display.kind();
+        var atlas = status.sprite.startsWith("block/") ? net.minecraft.data.AtlasIds.BLOCKS : net.minecraft.data.AtlasIds.ITEMS;
+        var label = net.minecraft.network.chat.Component.object(new net.minecraft.network.chat.contents.objects.AtlasSprite(
+                atlas, Identifier.withDefaultNamespace(status.sprite)));
+        var towards = villager.getEyePosition().subtract(player.getEyePosition());
+        if (towards.lengthSqr() <= 8 * 8 && player.getLookAngle().dot(towards.normalize()) > .97) {
+            var text = display.material().map(need -> {
+                var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(Identifier.parse(need.itemId()));
+                var name = new ItemStack(item).getHoverName();
+                if (display.pristine()) name = net.minecraft.network.chat.Component.translatable("status.totem.villager.pristine", name);
+                if (display.potion().isPresent()) {
+                    var id = Identifier.tryParse(display.potion().get());
+                    var potion = id == null ? java.util.Optional.<net.minecraft.core.Holder.Reference<net.minecraft.world.item.alchemy.Potion>>empty()
+                            : client.level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.POTION).get(id);
+                    if (potion.isEmpty()) name = net.minecraft.network.chat.Component.translatable("status.totem.villager.order_variant", name);
+                    else {
+                        name = net.minecraft.world.item.alchemy.PotionContents.createItemStack(item, potion.get()).getHoverName();
+                        var effects = potion.get().value().getEffects();
+                        if (!effects.isEmpty()) {
+                            var effect = effects.getFirst();
+                            var detail = net.minecraft.world.item.alchemy.PotionContents.getPotionDescription(effect.getEffect(), effect.getAmplifier());
+                            if (!effect.getEffect().value().isInstantaneous()) detail = detail.append(" ").append(
+                                    net.minecraft.world.effect.MobEffectUtil.formatDuration(effect, .25F, 20));
+                            name = name.copy().append(" (").append(detail).append(")");
+                        }
+                    }
+                }
+                return net.minecraft.network.chat.Component.translatable(status.translation(), need.count(), name);
+            }).orElseGet(() -> net.minecraft.network.chat.Component.translatable(status.translation()));
+            label.append(" ").append(text);
+        }
+        return label;
     }
 
     private static HumanoidArm armForHand(Villager villager, InteractionHand hand) {

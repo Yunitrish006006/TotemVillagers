@@ -144,7 +144,7 @@ public final class FletcherTippedArrowOrders {
         return CraftingInput.of(3, 3, grid);
     }
 
-    private static ItemStack potionForOrder(WorkOrder order, MerchantOffers offers, ServerLevel level) {
+    public static ItemStack potionForOrder(WorkOrder order, MerchantOffers offers, ServerLevel level) {
         MerchantOffer offer = matchingOffer(order, offers, level);
         return offer == null ? null : lingeringPotionFor(offer).orElse(null);
     }

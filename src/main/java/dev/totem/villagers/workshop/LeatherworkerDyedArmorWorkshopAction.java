@@ -48,7 +48,7 @@ public final class LeatherworkerDyedArmorWorkshopAction implements ValidatedWork
     public static boolean supports(WorkOrder order, ServerLevel level, BlockPos jobSite, MerchantOffers offers) {
         return LeatherworkerDyedArmorOrders.isOfferBoundDyedOrder(order)
                 && level.isLoaded(jobSite)
-                && level.getBlockState(jobSite).is(Blocks.CAULDRON)
+                && RecipeBackedWorkshopAction.matchesStation(level, jobSite, Blocks.CAULDRON)
                 && matchingOffer(order, offers, level) != null;
     }
 

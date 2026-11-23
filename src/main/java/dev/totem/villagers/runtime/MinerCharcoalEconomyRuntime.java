@@ -251,7 +251,8 @@ public final class MinerCharcoalEconomyRuntime {
     private static Optional<BlockPos> jobSite(ServerLevel level, Villager villager) {
         return villager.getBrain().getMemory(MemoryModuleType.JOB_SITE)
                 .filter(site -> site.dimension().equals(level.dimension())).map(GlobalPos::pos)
-                .filter(level::isLoaded).filter(position -> level.getBlockState(position).is(Blocks.FURNACE));
+                .filter(level::isLoaded).filter(position -> level.getBlockState(position).is(Blocks.FURNACE))
+                .filter(position -> dev.totem.villagers.world.MinerFurnaceWorkstation.mayUseAssignedStation(level, villager, position));
     }
 
     private static int count(VillagerWorkInventory inventory, Item item) {

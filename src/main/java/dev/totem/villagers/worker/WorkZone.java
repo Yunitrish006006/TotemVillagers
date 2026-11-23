@@ -12,14 +12,28 @@ public record WorkZone(
         UUID ownerId,
         String dimensionId,
         BlockCoordinate minimum,
-        BlockCoordinate maximum
+        BlockCoordinate maximum,
+        boolean naturalTimber,
+        boolean naturalQuarry
 ) {
     public static final Codec<WorkZone> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             UUIDUtil.CODEC.fieldOf("owner").forGetter(WorkZone::ownerId),
             Codec.STRING.fieldOf("dimension").forGetter(WorkZone::dimensionId),
             BlockCoordinate.CODEC.fieldOf("minimum").forGetter(WorkZone::minimum),
-            BlockCoordinate.CODEC.fieldOf("maximum").forGetter(WorkZone::maximum)
+            BlockCoordinate.CODEC.fieldOf("maximum").forGetter(WorkZone::maximum),
+            Codec.BOOL.optionalFieldOf("natural_timber", false).forGetter(WorkZone::naturalTimber),
+            Codec.BOOL.optionalFieldOf("natural_quarry", false).forGetter(WorkZone::naturalQuarry)
     ).apply(instance, WorkZone::new));
+
+    public WorkZone(UUID ownerId, String dimensionId, BlockCoordinate minimum, BlockCoordinate maximum) {
+        this(ownerId, dimensionId, minimum, maximum, false, false);
+    }
+
+    public WorkZone(UUID ownerId, String dimensionId, BlockCoordinate minimum, BlockCoordinate maximum, boolean naturalTimber) {
+        this(ownerId, dimensionId, minimum, maximum, naturalTimber, false);
+    }
+
+    public boolean personal() { return naturalTimber || naturalQuarry; }
 
     public WorkZone {
         Objects.requireNonNull(ownerId, "ownerId");

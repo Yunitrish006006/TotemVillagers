@@ -26,6 +26,17 @@ class WorkerAssignmentSavedDataTest {
     }
 
     @Test
+    void legacyAndManuallyReassignedWorkersAreProtectedFromCareerChanges() {
+        var miner = new WorkerAssignment(UUID.randomUUID(), "totem:miner", Optional.of(UUID.randomUUID()), Optional.empty(), true);
+        var ops = com.mojang.serialization.JsonOps.INSTANCE;
+        var json = WorkerAssignment.CODEC.encodeStart(ops, miner).getOrThrow();
+        assertEquals(miner, WorkerAssignment.CODEC.parse(ops, json).getOrThrow());
+        json.getAsJsonObject().remove("automatically_assigned");
+        assertFalse(WorkerAssignment.CODEC.parse(ops, json).getOrThrow().automaticallyAssigned());
+        assertFalse(miner.withWorkZone(miner.workZoneId()).automaticallyAssigned());
+    }
+
+    @Test
     void builderUsesTheSameOwnerBoundWorkZoneAssignmentModel() {
         UUID owner = UUID.fromString("00000000-0000-0000-0000-000000000711");
         WorkerAssignmentSavedData data = new WorkerAssignmentSavedData();

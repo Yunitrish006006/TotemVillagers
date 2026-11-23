@@ -19,7 +19,6 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +44,7 @@ public final class ToolsmithFiberWorldWorkAction {
         if (harvested.isEmpty()) {
             return false;
         }
-        ItemStack shears = bestShears(inventory.snapshot()).orElse(null);
+        ItemStack shears = ShearUse.best(inventory.snapshot()).orElse(null);
         if (shears == null) {
             return false;
         }
@@ -59,7 +58,7 @@ public final class ToolsmithFiberWorldWorkAction {
             return false;
         }
         List<ItemStack> returned = new ArrayList<>(drops);
-        ItemStack wornShears = wearOnce(shears);
+        ItemStack wornShears = ShearUse.wearOnce(shears);
         if (!wornShears.isEmpty()) {
             returned.add(wornShears);
         }
@@ -95,6 +94,50 @@ public final class ToolsmithFiberWorldWorkAction {
         return true;
     }
 
+    /** Hand-gather one grass plant when no shears are available. Both halves share a single credit. */
+    public boolean gatherGrass(ServerLevel level, Villager worker, BlockPos target, TagKey<Item> fibres,
+                               VillagerWorkInventory inventory) {
+        if (!level.isLoaded(target) || worker.distanceToSqr(Vec3.atCenterOf(target)) > WORK_REACH_SQUARED
+                || !WorldWorkPermissions.mayWork(level, worker, target)) {
+            return false;
+        }
+        BlockState state = level.getBlockState(target);
+        if (!state.is(Blocks.SHORT_GRASS) && !state.is(Blocks.TALL_GRASS)) {
+            return false;
+        }
+        ItemStack clipping = new ItemStack(state.getBlock().asItem());
+        if (!clipping.is(fibres)) {
+            return false;
+        }
+        List<BlockPos> positions = harvestedPositions(level, worker, target, state);
+        if (positions.isEmpty()) {
+            return false;
+        }
+        List<ItemStack> returns = new ArrayList<>(Block.getDrops(state, level, target, null, worker, ItemStack.EMPTY));
+        if (returns.stream().noneMatch(stack -> stack.is(clipping.getItem()))) {
+            returns.add(clipping);
+        }
+        if (!inventory.canInsertAllExact(returns)) {
+            return false;
+        }
+        Map<BlockPos, BlockState> captured = new LinkedHashMap<>();
+        positions.forEach(pos -> captured.put(pos, level.getBlockState(pos)));
+        // Remove the upper half first without neighbour drops, then notify once the plant is gone.
+        for (BlockPos pos : positions.reversed()) {
+            if (!level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS)) {
+                restore(level, captured);
+                return false;
+            }
+        }
+        if (!inventory.insertAllExact(returns)) {
+            restore(level, captured);
+            return false;
+        }
+        positions.forEach(pos -> level.updateNeighborsAt(pos, state.getBlock()));
+        worker.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+        return true;
+    }
+
     /** Rejects an upper half as a target and captures both halves so tall plants cannot be duplicated or orphaned. */
     private static List<BlockPos> harvestedPositions(ServerLevel level, Villager toolsmith,
                                                      BlockPos target, BlockState state) {
@@ -114,24 +157,7 @@ public final class ToolsmithFiberWorldWorkAction {
         return List.of(target, upper);
     }
 
-    private static Optional<ItemStack> bestShears(List<ItemStack> inventory) {
-        return inventory.stream().filter(stack -> stack.is(Items.SHEARS))
-                .map(stack -> stack.copyWithCount(1))
-                .min(Comparator.comparingInt(ItemStack::getDamageValue));
-    }
 
-    /** One successfully cut plant consumes one durability; the broken shears are not returned. */
-    private static ItemStack wearOnce(ItemStack shears) {
-        ItemStack worn = shears.copy();
-        if (!worn.isDamageableItem()) {
-            return worn;
-        }
-        if (worn.getDamageValue() + 1 >= worn.getMaxDamage()) {
-            return ItemStack.EMPTY;
-        }
-        worn.setDamageValue(worn.getDamageValue() + 1);
-        return worn;
-    }
 
     private static boolean isToolsmith(Villager villager) {
         var id = BuiltInRegistries.VILLAGER_PROFESSION.getKey(villager.getVillagerData().profession().value());

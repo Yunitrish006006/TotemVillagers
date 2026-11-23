@@ -10,6 +10,10 @@ import org.spongepowered.asm.mixin.Unique;
 
 @Mixin(VillagerRenderState.class)
 abstract class VillagerRenderStateWorkAnimationMixin implements VillagerWorkAnimationRenderState {
+    @Unique private net.minecraft.network.chat.Component totemVillagers$status;
+    public net.minecraft.network.chat.Component totemVillagers$status() { return totemVillagers$status; }
+    public void totemVillagers$setStatus(net.minecraft.network.chat.Component value) { totemVillagers$status = value; }
+
     @Unique
     private final ItemStackRenderState totemVillagers$rightHandItem = new ItemStackRenderState();
     @Unique

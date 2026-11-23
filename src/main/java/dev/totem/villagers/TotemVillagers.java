@@ -5,6 +5,7 @@ import dev.totem.villagers.command.TotemVillagersCommands;
 import dev.totem.villagers.guard.GuardDefenceOrderDefinitions;
 import dev.totem.villagers.runtime.VillagerMaterialLogisticsRuntime;
 import dev.totem.villagers.runtime.LoadedVillagerCache;
+import dev.totem.villagers.runtime.HouseholdSurvivalRuntime;
 import dev.totem.villagers.runtime.VillagerResourceWorkforceRuntime;
 import dev.totem.villagers.runtime.VillagerSpecialistProfessionRuntime;
 import dev.totem.villagers.runtime.VillageWorldgenBootstrapRuntime;
@@ -45,6 +46,8 @@ public final class TotemVillagers implements ModInitializer {
     @Override
     public void onInitialize() {
         LoadedVillagerCache.register();
+        dev.totem.villagers.world.NaturalOakTimber.register();
+        dev.totem.villagers.world.NaturalStoneFaces.register();
         VillagersManual.register();
         TotemVillagerBlocks.register();
         VillageUtilityFeature.register();
@@ -57,6 +60,7 @@ public final class TotemVillagers implements ModInitializer {
         TotemVillagersCommands.register();
         VillageWorldgenBootstrapRuntime.register();
         VillagerResourceWorkforceRuntime.register();
+        HouseholdSurvivalRuntime.register();
         VillagerSpecialistProfessionRuntime.register();
         VillagerBreedingEndowmentRuntime.register();
         VillagerStarterSupplyRuntime.register();
@@ -75,6 +79,7 @@ public final class TotemVillagers implements ModInitializer {
         VillagerFarmerWorkRuntime.register();
         VillagerBuilderRuntime.register();
         VillagerFoodEconomyRuntime.register();
+        dev.totem.villagers.runtime.VillagerHeadStatus.register();
         GuardConstructionRuntime.register();
         WorldEnablementRuntime.register();
         LOGGER.info("Totem Villagers initialized with physical villager inventories and finite starter supplies");

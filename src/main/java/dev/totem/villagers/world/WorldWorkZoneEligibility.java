@@ -27,12 +27,16 @@ public final class WorldWorkZoneEligibility {
         Objects.requireNonNull(dimensionId, "dimensionId");
         Objects.requireNonNull(zones, "zones");
         Objects.requireNonNull(assignment, "assignment");
+        return assignedZone(villagerId, professionId, dimensionId, id -> Optional.ofNullable(zones.get(id)), assignment);
+    }
+
+    public Optional<WorkZoneRecord> assignedZone(UUID villagerId, String professionId, String dimensionId,
+            java.util.function.Function<UUID, Optional<WorkZoneRecord>> lookup, Optional<WorkerAssignment> assignment) {
         return assignment
                 .filter(value -> value.villagerId().equals(villagerId))
                 .filter(value -> value.roleId().equals(professionId))
                 .flatMap(WorkerAssignment::workZoneId)
-                .map(zones::get)
-                .filter(Objects::nonNull)
+                .flatMap(lookup)
                 .filter(zone -> zone.roleId().equals(professionId))
                 .filter(zone -> zone.zone().dimensionId().equals(dimensionId));
     }

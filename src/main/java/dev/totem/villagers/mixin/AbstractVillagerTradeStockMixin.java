@@ -24,6 +24,7 @@ abstract class AbstractVillagerTradeStockMixin {
         VillagerTradeStockAuthority.creditAfterSuccessfulPlayerPurchase((AbstractVillager) (Object) this, offer);
         VillagerTradeStockAuthority.debitAfterSuccessfulTrade((AbstractVillager) (Object) this, offer);
         if ((Object) this instanceof net.minecraft.world.entity.npc.villager.Villager villager) {
+            dev.totem.villagers.runtime.VillagerCareerHistory.traded(villager);
             VillagerFoodEconomyRuntime.recordPlayerPayment(villager, offer);
         }
     }

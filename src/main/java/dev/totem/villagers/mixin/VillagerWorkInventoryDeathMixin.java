@@ -31,6 +31,7 @@ abstract class VillagerWorkInventoryDeathMixin {
         FishermanCampfireFuelSavedData.forServer(level.getServer()).remove(villager.getUUID());
         MinerFurnaceMaintenanceSavedData.forServer(level.getServer()).remove(villager.getUUID());
         MinerOreSafetySavedData.forServer(level.getServer()).remove(villager.getUUID());
+        dev.totem.villagers.worker.ProductionParcel.get(level.getServer()).release(villager.getUUID());
         WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(level.getServer());
         assignments.getAssignment(villager.getUUID())
                 .filter(assignment -> TotemVillagerProfessions.MINER_ID.toString().equals(assignment.roleId())

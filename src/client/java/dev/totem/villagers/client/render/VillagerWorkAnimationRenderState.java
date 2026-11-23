@@ -6,6 +6,10 @@ import net.minecraft.world.item.ItemUseAnimation;
 
 /** Extra per-frame state for the villager's player-style arms and held items. */
 public interface VillagerWorkAnimationRenderState {
+    net.minecraft.network.chat.Component totemVillagers$status();
+
+    void totemVillagers$setStatus(net.minecraft.network.chat.Component status);
+
     ItemStackRenderState totemVillagers$rightHandItem();
 
     ItemStackRenderState totemVillagers$leftHandItem();

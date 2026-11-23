@@ -1,6 +1,7 @@
 package dev.totem.villagers.command;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.minecraft.commands.arguments.IdentifierArgument;
 import dev.totem.villagers.builder.BuilderSite;
 import dev.totem.villagers.builder.BuilderSiteSavedData;
 import dev.totem.villagers.builder.VanillaVillageBlueprints;
@@ -43,7 +44,7 @@ public final class TotemVillagersCommands {
             root.then(Commands.literal("start").executes(context -> startPlaying(context.getSource())));
             root.then(Commands.literal("role")
                     .then(Commands.argument("villager", UuidArgument.uuid())
-                            .then(Commands.argument("role", StringArgumentType.word())
+                            .then(Commands.argument("role", IdentifierArgument.id())
                                     .suggests((context, builder) -> {
                                         builder.suggest("totem:miner");
                                         builder.suggest("totem:lumberjack");
@@ -53,7 +54,7 @@ public final class TotemVillagersCommands {
                                     })
                                     .executes(context -> assignSpecialistRole(context.getSource(),
                                             UuidArgument.getUuid(context, "villager"),
-                                            StringArgumentType.getString(context, "role"))))));
+                                            IdentifierArgument.getId(context, "role").toString())))));
             root.then(workZoneCommands());
             root.then(builderSiteCommands());
             root.then(needsCommands());
@@ -102,11 +103,11 @@ public final class TotemVillagersCommands {
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<net.minecraft.commands.CommandSourceStack> workZoneCommands() {
         var zone = Commands.literal("work-zone");
         var create = Commands.literal("create");
-        var role = Commands.argument("role", StringArgumentType.word());
+        var role = Commands.argument("role", IdentifierArgument.id());
         var minimum = Commands.argument("minimum", BlockPosArgument.blockPos());
         var maximum = Commands.argument("maximum", BlockPosArgument.blockPos())
                 .executes(context -> createWorkZone(context.getSource(),
-                        StringArgumentType.getString(context, "role"),
+                        IdentifierArgument.getId(context, "role").toString(),
                         BlockPosArgument.getLoadedBlockPos(context, "minimum"),
                         BlockPosArgument.getLoadedBlockPos(context, "maximum")));
         minimum.then(maximum);
@@ -205,15 +206,24 @@ public final class TotemVillagersCommands {
         var register = Commands.literal("register");
         var builder = Commands.argument("builder", UuidArgument.uuid());
         var anchor = Commands.argument("anchor", BlockPosArgument.blockPos());
-        var template = Commands.argument("template", StringArgumentType.word())
+        var template = Commands.argument("template", IdentifierArgument.id())
                 .executes(context -> registerBuilderSite(context.getSource(),
                         UuidArgument.getUuid(context, "builder"),
                         BlockPosArgument.getLoadedBlockPos(context, "anchor"),
-                        StringArgumentType.getString(context, "template")));
+                        IdentifierArgument.getId(context, "template").toString(), false));
         anchor.then(template);
         builder.then(anchor);
         register.then(builder);
         builderSite.then(register);
+        builderSite.then(Commands.literal("project")
+                .then(Commands.argument("zone", UuidArgument.uuid())
+                .then(Commands.argument("anchor", BlockPosArgument.blockPos())
+                .then(Commands.argument("template", IdentifierArgument.id())
+                .executes(context -> registerBuilderSite(context.getSource(), UuidArgument.getUuid(context, "zone"),
+                        BlockPosArgument.getLoadedBlockPos(context, "anchor"), IdentifierArgument.getId(context, "template").toString(), true))))));
+        builderSite.then(Commands.literal("cancel-project").then(Commands.argument("zone", UuidArgument.uuid())
+                .executes(context -> BuilderSiteSavedData.forServer(context.getSource().getServer()).cancelProject(
+                        UuidArgument.getUuid(context, "zone"), context.getSource().getPlayerOrException().getUUID()) ? 1 : 0)));
 
         builderSite.then(Commands.literal("status")
                 .then(Commands.argument("builder", UuidArgument.uuid())
@@ -227,21 +237,20 @@ public final class TotemVillagersCommands {
     }
 
     private static int registerBuilderSite(net.minecraft.commands.CommandSourceStack source, java.util.UUID builderId,
-                                           BlockPos anchor, String rawTemplate)
+                                           BlockPos anchor, String rawTemplate, boolean project)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         var player = source.getPlayerOrException();
-        Villager builder = findLoadedVillager(source.getServer(), builderId);
-        if (builder == null) {
+        if (!project && findLoadedVillager(source.getServer(), builderId) == null) {
             source.sendFailure(Component.literal("That Builder is not in a loaded chunk; no chunk was loaded"));
             return 0;
         }
         var assignments = dev.totem.villagers.worker.WorkerAssignmentSavedData.forServer(source.getServer());
         var assignment = assignments.getAssignment(builderId).orElse(null);
-        if (assignment == null || !"totem:builder".equals(assignment.roleId())) {
+        if (!project && (assignment == null || !"totem:builder".equals(assignment.roleId()))) {
             source.sendFailure(Component.literal("Assign that villager the Totem Builder role first"));
             return 0;
         }
-        var zone = assignment.workZoneId().flatMap(assignments::getZone).orElse(null);
+        var zone = (project ? assignments.getZone(builderId) : assignment.workZoneId().flatMap(assignments::getZone)).orElse(null);
         if (zone == null || !"totem:builder".equals(zone.roleId()) || !zone.zone().ownerId().equals(player.getUUID())
                 || !zone.zone().dimensionId().equals(source.getLevel().dimension().identifier().toString())) {
             source.sendFailure(Component.literal("Assign that Builder an owned Builder Work Zone in this dimension first"));
@@ -268,8 +277,19 @@ public final class TotemVillagersCommands {
                     + outsideZone.orElseThrow().toShortString()));
             return 0;
         }
+        if (project) {
+            var request = new dev.totem.villagers.builder.BuilderProject(zone.id(), player.getUUID(),
+                    dimensionId, templateId.toString(), anchor.asLong(), 0);
+            if (assignments.assignmentSnapshot().values().stream().anyMatch(a -> a.workZoneId().filter(zone.id()::equals).isPresent())
+                    || !BuilderSiteSavedData.forServer(source.getServer()).submit(request, player.getUUID())) {
+                source.sendFailure(Component.literal("Construction zone already staffed or reserved"));
+                return 0;
+            }
+            source.sendSuccess(() -> Component.literal("Registered village construction project in " + zone.id()), true);
+            return 1;
+        }
         BuilderSite site = new BuilderSite(java.util.UUID.randomUUID(), player.getUUID(), builderId,
-                templateId.toString(), dimensionId, anchor.asLong(), 0);
+                templateId.toString(), dimensionId, anchor.asLong(), 0).planAccess(source.getLevel(), blueprint);
         if (!BuilderSiteSavedData.forServer(source.getServer()).registerOrReplace(site, player.getUUID())) {
             source.sendFailure(Component.literal("That Builder already has another owner's construction site"));
             return 0;
@@ -346,6 +366,20 @@ public final class TotemVillagersCommands {
         guard.then(pad);
         register.then(guard);
         guardPost.then(register);
+        guardPost.then(Commands.literal("recruit").then(Commands.argument("construction_pad", BlockPosArgument.blockPos())
+                .executes(context -> {
+                    var source = context.getSource();
+                    var owner = source.getPlayerOrException().getUUID();
+                    var padPos = BlockPosArgument.getLoadedBlockPos(context, "construction_pad");
+                    var post = new dev.totem.villagers.guard.GuardPost(java.util.UUID.randomUUID(), owner,
+                            source.getLevel().dimension().identifier().toString(), padPos.asLong());
+                    if (!dev.totem.villagers.guard.ManagedVillageSavedData.forServer(source.getServer()).recruit(post, owner)) {
+                        source.sendFailure(Component.literal("An existing Guard Post already uses this construction pad"));
+                        return 0;
+                    }
+                    source.sendSuccess(() -> Component.literal("Opened Guard Post " + post.villageId() + " at " + padPos.toShortString()), true);
+                    return 1;
+                })));
 
         guardPost.then(Commands.literal("unregister")
                 .then(Commands.argument("village", UuidArgument.uuid())
@@ -410,6 +444,10 @@ public final class TotemVillagersCommands {
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         var player = source.getPlayerOrException();
         var villages = dev.totem.villagers.guard.ManagedVillageSavedData.forServer(source.getServer());
+        if (villages.cancelRecruitment(villageId, player.getUUID())) {
+            source.sendSuccess(() -> Component.literal("Cancelled Guard recruitment " + villageId), true);
+            return 1;
+        }
         var existing = villages.get(villageId).orElse(null);
         if (existing == null || !villages.remove(villageId, player.getUUID())) {
             source.sendFailure(Component.literal("You do not own that managed Guard village"));
@@ -424,7 +462,15 @@ public final class TotemVillagersCommands {
     }
 
     private static int showGuardPostStatus(net.minecraft.commands.CommandSourceStack source, java.util.UUID villageId) {
-        var village = dev.totem.villagers.guard.ManagedVillageSavedData.forServer(source.getServer()).get(villageId).orElse(null);
+        var store = dev.totem.villagers.guard.ManagedVillageSavedData.forServer(source.getServer());
+        var vacancy = store.vacancy(villageId).orElse(null);
+        if (vacancy != null) {
+            source.sendSuccess(() -> Component.literal("Guard Post " + villageId + " is recruiting at "
+                    + BlockPos.of(vacancy.post().packedConstructionPad()).toShortString() + ", defence demand "
+                    + vacancy.ticks() + "/" + dev.totem.villagers.guard.ManagedVillageSavedData.Vacancy.WAIT), false);
+            return 1;
+        }
+        var village = store.get(villageId).orElse(null);
         if (village == null) {
             source.sendFailure(Component.literal("No managed Guard village has that id"));
             return 0;

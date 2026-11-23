@@ -200,10 +200,15 @@ public final class RecipeBackedWorkshopAction implements ValidatedWorkshopAction
                 && (smithCraftingInput(order) != null || backpackSmithingInput(order) != null);
     }
 
+    public static boolean matchesStation(ServerLevel level, BlockPos pos, net.minecraft.world.level.block.Block expected) {
+        var state = level.getBlockState(pos);
+        return expected == Blocks.CAULDRON ? state.is(net.minecraft.tags.BlockTags.CAULDRONS) : state.is(expected);
+    }
+
     private static boolean supportsLeatherworker(WorkOrder order, ServerLevel level, BlockPos jobSite) {
         return "minecraft:leatherworker".equals(order.professionId())
                 && level.isLoaded(jobSite)
-                && level.getBlockState(jobSite).is(Blocks.CAULDRON)
+                && matchesStation(level, jobSite, Blocks.CAULDRON)
                 && leatherworkerInput(order) != null;
     }
 
@@ -293,6 +298,19 @@ public final class RecipeBackedWorkshopAction implements ValidatedWorkshopAction
         return returnedItem.copy();
     }
 
+    /** Rechecks a replacement tool's actual crafting grid without consuming ingredients or playing work effects. */
+    public static boolean hasToolRecipe(ServerLevel level, WorkOrder order) {
+        if (order == null || !order.professionId().equals("minecraft:toolsmith")
+                || !order.allowedSources().contains(dev.totem.villagers.work.WorkSource.WORKSHOP)) return false;
+        var input = smithCraftingInput(order);
+        if (input == null) return false;
+        var recipe = level.recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, level).orElse(null);
+        if (recipe == null || !recipe.value().matches(input, level)
+                || !order.matchesOutput(recipe.value().assemble(input), level.registryAccess())) return false;
+        var remainder = combinedRemainder(recipe.value().getRemainingItems(input));
+        return remainder != null && remainder.isEmpty();
+    }
+
     private boolean completeCrafting(CraftingInput input) {
         if (input == null) {
             return false;
@@ -347,6 +365,13 @@ public final class RecipeBackedWorkshopAction implements ValidatedWorkshopAction
      * the first matching recipe-map entry.
      */
     private boolean completeStonecutting() {
+        if (!hasStonecuttingRecipe(level, order)) return false;
+        villager.playWorkSound();
+        return true;
+    }
+
+    /** Construction commissions accept only cuts that the loaded stonecutter recipes can actually produce. */
+    public static boolean hasStonecuttingRecipe(ServerLevel level, WorkOrder order) {
         SingleRecipeInput input = singleItemInput(order.requiredInputs());
         if (input == null) {
             return false;
@@ -357,10 +382,7 @@ public final class RecipeBackedWorkshopAction implements ValidatedWorkshopAction
                 .map(holder -> holder.value())
                 .filter(recipe -> recipe.matches(input, level))
                 .map(recipe -> recipe.assemble(input))
-                .filter(output -> order.matchesOutput(output, level.registryAccess()))
-                .findFirst()
-                .map(this::completeOutput)
-                .orElse(false);
+                .anyMatch(output -> order.matchesOutput(output, level.registryAccess()));
     }
 
     private boolean completeOutput(ItemStack output) {
@@ -848,6 +870,10 @@ public final class RecipeBackedWorkshopAction implements ValidatedWorkshopAction
     private static boolean masonSingleInput(WorkOrder order) {
         return switch (order.output().itemId()) {
             case "minecraft:brick" -> exactSingleItem(order.requiredInputs(), "minecraft:clay_ball");
+            case "minecraft:cobblestone_stairs" -> exactSingleItem(order.requiredInputs(), "minecraft:cobblestone");
+            case "minecraft:cobblestone_slab" -> exactSingleItem(order.requiredInputs(), "minecraft:cobblestone");
+            case "minecraft:stone_bricks" -> exactSingleItem(order.requiredInputs(), "minecraft:stone");
+            case "minecraft:sandstone_stairs" -> exactSingleItem(order.requiredInputs(), "minecraft:sandstone");
             case "minecraft:chiseled_stone_bricks" -> exactSingleItem(order.requiredInputs(), "minecraft:stone");
             case "minecraft:polished_andesite" -> exactSingleItem(order.requiredInputs(), "minecraft:andesite");
             case "minecraft:polished_diorite" -> exactSingleItem(order.requiredInputs(), "minecraft:diorite");
@@ -860,8 +886,12 @@ public final class RecipeBackedWorkshopAction implements ValidatedWorkshopAction
         };
     }
 
-    /** The first Leatherworker path uses the exact shaped vanilla saddle recipe. */
     private static CraftingInput leatherworkerInput(WorkOrder order) {
+        if ("minecraft:leather_boots".equals(order.output().itemId()) && order.outputComponentPatch().isBlank()
+                && exactInputCounts(order.requiredInputs(), java.util.Map.of("minecraft:leather", 4))) {
+            return CraftingInput.of(3, 2, List.of(new ItemStack(Items.LEATHER), ItemStack.EMPTY, new ItemStack(Items.LEATHER),
+                    new ItemStack(Items.LEATHER), ItemStack.EMPTY, new ItemStack(Items.LEATHER)));
+        }
         if (!"minecraft:saddle".equals(order.output().itemId())
                 || !exactInputCounts(order.requiredInputs(), java.util.Map.of(
                 "minecraft:leather", 3, "minecraft:iron_ingot", 1))) {

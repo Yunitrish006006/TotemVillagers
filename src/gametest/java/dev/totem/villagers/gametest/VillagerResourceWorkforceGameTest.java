@@ -61,6 +61,33 @@ public final class VillagerResourceWorkforceGameTest {
                     BuiltInRegistries.VILLAGER_PROFESSION.wrapAsHolder(unemployed)));
             require(helper, "totem:miner".equals(professionId(miner)),
                     "Vanilla profession reset erased a durably assigned Miner career");
+            var home = helper.absolutePos(new BlockPos(5, 3, 3));
+            var bed = BuiltInRegistries.BLOCK.getValue(Identifier.parse("minecraft:red_bed"));
+            helper.getLevel().setBlock(home, bed.defaultBlockState(), 2);
+            miner.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME,
+                    net.minecraft.core.GlobalPos.of(helper.getLevel().dimension(), home));
+            VillagerResourceWorkforceRuntime.tickForGameTest(server);
+            require(helper, assignments.getAssignment(miner.getUUID()).orElseThrow().home().equals(
+                    miner.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME)),
+                    "Existing miner did not retain its first observed home");
+            miner.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME);
+            VillagerResourceWorkforceRuntime.tickForGameTest(server);
+            require(helper, assignments.getAssignment(miner.getUUID()).orElseThrow().workZoneId().isEmpty()
+                    && miner.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.JOB_SITE).isEmpty()
+                    && professionId(miner).equals("totem:miner"), "Losing a home did not release just the mine and furnace");
+            miner.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME,
+                    net.minecraft.core.GlobalPos.of(helper.getLevel().dimension(), home));
+            VillagerResourceWorkforceRuntime.tickForGameTest(server);
+            require(helper, assignments.getAssignment(miner.getUUID()).orElseThrow().workZoneId().filter(minerZone.id()::equals).isPresent(),
+                    "Rehoused miner failed to reclaim a nearby vacant mine");
+            for (var specialist : List.of(first, second, third)) {
+                if (assignments.getAssignment(specialist.getUUID()).isEmpty()) continue;
+                specialist.discard();
+                require(helper, assignments.getAssignment(specialist.getUUID()).isEmpty(),
+                        "Removed specialist kept its work zone staffed");
+            }
+            require(helper, assignments.zoneSnapshot().containsKey(minerZone.id())
+                    && assignments.zoneSnapshot().containsKey(lumberjackZone.id()), "Configured zone disappeared with its worker");
             helper.succeed();
         } finally {
             settings.setMode(WorkBackedTradingMode.DISABLED);
@@ -94,6 +121,10 @@ public final class VillagerResourceWorkforceGameTest {
         try {
             settings.setMode(WorkBackedTradingMode.ENFORCED);
             VillagerResourceWorkforceRuntime.tickForGameTest(server);
+            var founders = List.of(first, second, third, fourth);
+            require(helper, founders.stream().noneMatch(v -> "minecraft:toolsmith".equals(professionId(v))),
+                    "Routine workforce allocation bypassed the smith's trial");
+            VillagerResourceWorkforceRuntime.allocateFoundingWorkforce(server, founders);
             List<String> roles = List.of(first, second, third, fourth).stream()
                     .map(VillagerResourceWorkforceGameTest::professionId).sorted().toList();
             require(helper, roles.equals(List.of("minecraft:farmer", "minecraft:toolsmith", "totem:lumberjack", "totem:miner")),
@@ -124,6 +155,8 @@ public final class VillagerResourceWorkforceGameTest {
         var server = helper.getLevel().getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
         WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(server);
+        // The closer mine has no furnace yet. It must not block recruitment into the operational mine.
+        var unfinished = assignments.createZone("totem:miner", zone(helper, UUID.randomUUID(), new BlockPos(6, 1, 2)));
         WorkZoneRecord minerZone = assignments.createZone("totem:miner", zone(helper, UUID.randomUUID(), new BlockPos(7, 1, 6)));
         helper.setBlock(new BlockPos(7, 2, 6), Blocks.FURNACE);
         Villager candidate = spawnUnemployed(helper, new BlockPos(7, 3, 4));
@@ -142,6 +175,7 @@ public final class VillagerResourceWorkforceGameTest {
             settings.setMode(WorkBackedTradingMode.DISABLED);
             assignments.removeAssignment(candidate.getUUID());
             assignments.removeZone(minerZone.id());
+            assignments.removeZone(unfinished.id());
             candidate.discard();
         }
     }

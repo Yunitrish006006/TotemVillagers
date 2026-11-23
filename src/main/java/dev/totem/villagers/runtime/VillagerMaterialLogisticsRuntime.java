@@ -65,6 +65,9 @@ public final class VillagerMaterialLogisticsRuntime {
             }
             for (Villager recipient : villagers) {
                 transferOneMissingIngredient(level, recipient, villagers, inventories, demands);
+                if (recipient.getVillagerData().profession().is(net.minecraft.world.entity.npc.villager.VillagerProfession.FLETCHER)
+                        || dev.totem.villagers.worker.TotemVillagerProfessions.GUARD_ID.equals(net.minecraft.core.registries.BuiltInRegistries.VILLAGER_PROFESSION.getKey(recipient.getVillagerData().profession().value())))
+                    VillageWorkshopApprenticeship.observeArrowDemand(level, recipient, demands.get(recipient.getUUID()).orElse(null), level.getGameTime());
             }
         }
     }
@@ -76,90 +79,90 @@ public final class VillagerMaterialLogisticsRuntime {
             VillagerWorkInventorySavedData inventories,
             Map<UUID, Optional<WorkOrder>> demands
     ) {
-        if (!VillagerWorkNeeds.canWork(recipient)) {
+        if (!VillagerWorkNeeds.canWork(recipient) || !VillageWorkshopApprenticeship.available(level, recipient)) {
+            VillagerHeadStatus.clear(recipient, VillagerHeadStatus.Kind.MATERIAL);
             return;
         }
         Optional<WorkOrder> demand = demands.getOrDefault(recipient.getUUID(), Optional.empty());
         if (demand.isEmpty()) {
+            VillagerHeadStatus.clear(recipient, VillagerHeadStatus.Kind.MATERIAL);
             return;
         }
         VillagerWorkInventory recipientInventory = inventories.inventory(recipient.getUUID());
-        Optional<MaterialNeed> missing = firstMissingIngredient(recipientInventory, demand.orElseThrow());
+        var order = demand.orElseThrow();
+        var ingredients = VillagerWorkshopRuntime.exactIngredients(order, recipient.getOffers(), level);
+        Optional<ItemAmount> missing = firstMissingIngredient(recipientInventory, order, ingredients);
         if (missing.isEmpty()) {
+            VillagerHeadStatus.clear(recipient, VillagerHeadStatus.Kind.MATERIAL);
             return;
         }
-        Optional<MaterialPurchase> purchase = purchaseFor(recipient, missing.orElseThrow(),
+        var exact = ingredients.get(missing.get().itemId());
+        Optional<MaterialPurchase> purchase = purchaseFor(recipient, missing.orElseThrow(), exact,
                 recipientInventory.countMatchingItem(new ItemStack(Items.EMERALD)));
         if (purchase.isEmpty()) {
+            reportShortage(level, recipient, missing.orElseThrow(), exact);
             return;
         }
-        Optional<Supplier> supplier = villagers.stream()
-                .filter(candidate -> candidate != recipient && VillagerWorkNeeds.canWork(candidate))
+        var rate = purchase.orElseThrow();
+        var payment = new ItemStack(Items.EMERALD, rate.emeraldPrice());
+        var suppliers = villagers.stream()
+                .filter(candidate -> candidate != recipient && VillagerWorkNeeds.canWork(candidate)
+                        && VillageWorkshopApprenticeship.available(level, candidate))
                 .filter(candidate -> recipient.distanceToSqr(candidate) <= SEARCH_RANGE_SQUARED)
-                .map(candidate -> supplierFor(candidate, inventories, missing.orElseThrow(), purchase.orElseThrow(),
+                .map(candidate -> supplierFor(level, candidate, inventories, missing.orElseThrow(), rate,
                         demands.getOrDefault(candidate.getUUID(), Optional.empty())))
                 .flatMap(Optional::stream)
-                .min(java.util.Comparator.comparingDouble(entry -> recipient.distanceToSqr(entry.villager())));
-        if (supplier.isEmpty()) {
-            return;
-        }
-        Supplier selected = supplier.orElseThrow();
-        if (recipient.distanceToSqr(selected.villager()) > HANDOFF_RANGE_SQUARED) {
-            recipient.getNavigation().moveTo(selected.villager(), .5D);
-            return;
-        }
-        ItemStack purchasedMaterial = selected.purchase().material().copy();
-        ItemStack payment = new ItemStack(Items.EMERALD, selected.purchase().emeraldPrice());
-        if (!recipientInventory.canInsertExact(purchasedMaterial)
-                || !selected.inventory().canInsertExact(payment)
-                || recipientInventory.takeExactMatchingItem(payment).isEmpty()) {
-            return;
-        }
-        ItemStack delivered = selected.inventory().takeExactMatchingItem(purchasedMaterial).orElse(null);
-        if (delivered == null) {
-            recipientInventory.insertExact(payment);
-            return;
-        }
-        if (!recipientInventory.insertExact(delivered)) {
-            if (!selected.inventory().insertExact(delivered)) {
-                selected.villager().spawnAtLocation(level, delivered);
+                .sorted(java.util.Comparator.comparingDouble(entry -> recipient.distanceToSqr(entry.villager()))).toList();
+        for (var supplier : suppliers) {
+            if (recipient.distanceToSqr(supplier.villager()) <= HANDOFF_RANGE_SQUARED && recipient.hasLineOfSight(supplier.villager())) {
+                if (!WorkshopLocalMarket.exchange(inventories, supplier.inventory(), recipientInventory, rate.material(), payment)) continue;
+            } else {
+                if (!recipientInventory.canInsertExact(rate.material()) || !supplier.inventory().canInsertExact(payment)) {
+                    var copy = inventories.copyAccounts(List.of(recipient.getUUID(), supplier.villager().getUUID()));
+                    if (!WorkshopLocalMarket.exchange(copy, copy.inventory(supplier.villager().getUUID()),
+                            copy.inventory(recipient.getUUID()), rate.material(), payment)) continue;
+                }
+                var path = recipient.getNavigation().createPath(supplier.villager(), 0);
+                if (path == null || !path.canReach() || !recipient.getNavigation().moveTo(path, .5)) continue;
             }
-            recipientInventory.insertExact(payment);
+            VillagerHeadStatus.clear(recipient, VillagerHeadStatus.Kind.MATERIAL);
             return;
         }
-        if (!selected.inventory().insertExact(payment)) {
-            throw new IllegalStateException("Supplier inventory changed during same-tick emerald transfer");
-        }
+        reportShortage(level, recipient, missing.orElseThrow(), exact);
     }
 
-    private static Optional<MaterialNeed> firstMissingIngredient(VillagerWorkInventory inventory, WorkOrder order) {
-        Map<String, Integer> required = new LinkedHashMap<>();
-        for (ItemAmount input : order.requiredInputs()) {
-            required.merge(input.itemId(), input.count(), Math::addExact);
-        }
-        for (Map.Entry<String, Integer> entry : required.entrySet()) {
-            int missing = entry.getValue() - count(inventory, entry.getKey());
+    private static Optional<ItemAmount> firstMissingIngredient(VillagerWorkInventory inventory, WorkOrder order, Map<String, ItemStack> exact) {
+        for (var entry : ItemAmount.totals(order.requiredInputs()).entrySet()) {
+            int held = exact.containsKey(entry.getKey()) ? inventory.countMatchingItem(exact.get(entry.getKey())) : count(inventory, entry.getKey());
+            int missing = entry.getValue() - held;
             if (missing > 0) {
-                return Optional.of(new MaterialNeed(entry.getKey(), missing));
+                return Optional.of(new ItemAmount(entry.getKey(), missing));
             }
         }
         return Optional.empty();
     }
 
     private static Optional<Supplier> supplierFor(
-            Villager supplier,
+            ServerLevel level, Villager supplier,
             VillagerWorkInventorySavedData inventories,
-            MaterialNeed need,
+            ItemAmount need,
             MaterialPurchase purchase,
             Optional<WorkOrder> supplierDemand
     ) {
         VillagerWorkInventory inventory = inventories.inventory(supplier.getUUID());
-        int ownReservation = supplierDemand
-                .map(order -> requiredCount(order, need.itemId()))
-                .orElse(0);
-        int transferable = inventory.countMatchingItem(purchase.material()) - ownReservation;
+        int matching = inventory.countMatchingItem(purchase.material());
+        if (matching < purchase.material().getCount()) return Optional.empty();
+        int ownReservation = supplierDemand.map(order -> {
+            int required = requiredCount(order, need.itemId());
+            if (required == 0) return 0;
+            var ownExact = VillagerWorkshopRuntime.exactIngredients(order, supplier.getOffers(), level).get(need.itemId());
+            if (ownExact != null) return ItemStack.isSameItemSameComponents(ownExact, purchase.material()) ? required : 0;
+            int otherVariants = count(inventory, need.itemId()) - matching;
+            return Math.max(0, required - otherVariants);
+        }).orElse(0);
+        int transferable = matching - ownReservation;
         return transferable >= purchase.material().getCount()
-                ? Optional.of(new Supplier(supplier, inventory, purchase))
+                ? Optional.of(new Supplier(supplier, inventory))
                 : Optional.empty();
     }
 
@@ -169,26 +172,31 @@ public final class VillagerMaterialLogisticsRuntime {
      * autonomous transaction; side inputs stay player-facing rather than being
      * silently invented or selected by the runtime.
      */
-    private static Optional<MaterialPurchase> purchaseFor(Villager recipient, MaterialNeed need, int buyerEmeralds) {
+    private static Optional<MaterialPurchase> purchaseFor(Villager recipient, ItemAmount need, ItemStack exact, int buyerEmeralds) {
         if (buyerEmeralds < 1) {
             return Optional.empty();
         }
         return recipient.getOffers().stream()
                 .filter(offer -> !offer.isOutOfStock())
-                .map(VillagerMaterialLogisticsRuntime::materialPurchase)
+                .map(offer -> materialPurchase(offer, exact))
                 .flatMap(Optional::stream)
-                .filter(purchase -> purchase.materialId().equals(need.itemId()))
+                .filter(purchase -> purchase.materialId().equals(need.itemId())
+                        && (exact == null || ItemStack.isSameItemSameComponents(exact, purchase.material())))
                 .filter(purchase -> purchase.emeraldPrice() <= buyerEmeralds)
                 .min(java.util.Comparator.comparingInt(MaterialPurchase::emeraldPrice)
                         .thenComparingInt(purchase -> purchase.material().getCount()));
     }
 
-    private static Optional<MaterialPurchase> materialPurchase(MerchantOffer offer) {
+    private static Optional<MaterialPurchase> materialPurchase(MerchantOffer offer, ItemStack exact) {
         ItemStack material = offer.getCostA();
         ItemStack extraCost = offer.getCostB();
         ItemStack payment = offer.getResult();
         if (material.isEmpty() || !extraCost.isEmpty() || !payment.is(Items.EMERALD) || payment.getCount() < 1) {
             return Optional.empty();
+        }
+        if (exact != null) {
+            if (!offer.getItemCostA().test(exact)) return Optional.empty();
+            material = exact.copyWithCount(material.getCount());
         }
         return Optional.of(new MaterialPurchase(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(material.getItem()).toString(),
                 material.copy(), payment.getCount()));
@@ -209,12 +217,18 @@ public final class VillagerMaterialLogisticsRuntime {
                 .sum();
     }
 
-    private record MaterialNeed(String itemId, int count) {
+    private static void reportShortage(ServerLevel level, Villager worker, ItemAmount missing, ItemStack exact) {
+        if (dev.totem.villagers.work.VillagerWorkSavedData.forServer(level.getServer()).get(worker.getUUID())
+                .flatMap(state -> state.activeWork()).isPresent()) {
+            VillagerHeadStatus.clear(worker, VillagerHeadStatus.Kind.MATERIAL);
+        } else {
+            VillagerHeadStatus.missingMaterial(worker, missing, exact);
+        }
     }
 
     private record MaterialPurchase(String materialId, ItemStack material, int emeraldPrice) {
     }
 
-    private record Supplier(Villager villager, VillagerWorkInventory inventory, MaterialPurchase purchase) {
+    private record Supplier(Villager villager, VillagerWorkInventory inventory) {
     }
 }

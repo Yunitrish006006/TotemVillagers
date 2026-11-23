@@ -83,6 +83,8 @@ public final class VillageUtilityFeature implements Feature {
             return false;
         }
         buildMine(level, furnace, mineDirection(), clip);
+        if (clip.isInside(furnace) && level instanceof net.minecraft.server.level.ServerLevel serverLevel)
+            dev.totem.villagers.world.MinerFurnaceWorkstation.markGenerated(serverLevel, furnace);
         return true;
     }
 

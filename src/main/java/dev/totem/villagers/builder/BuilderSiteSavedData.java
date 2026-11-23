@@ -20,7 +20,8 @@ public final class BuilderSiteSavedData extends SavedData {
     public static final int DATA_VERSION = 1;
     public static final Codec<BuilderSiteSavedData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.INT.optionalFieldOf("data_version", DATA_VERSION).forGetter(BuilderSiteSavedData::dataVersion),
-            BuilderSite.CODEC.listOf().optionalFieldOf("sites", List.of()).forGetter(BuilderSiteSavedData::siteList)
+            BuilderSite.CODEC.listOf().optionalFieldOf("sites", List.of()).forGetter(BuilderSiteSavedData::siteList),
+            BuilderProject.CODEC.listOf().optionalFieldOf("projects", List.of()).forGetter(BuilderSiteSavedData::projects)
     ).apply(instance, BuilderSiteSavedData::new));
     public static final SavedDataType<BuilderSiteSavedData> TYPE = new SavedDataType<>(
             Identifier.fromNamespaceAndPath("totem-villagers", "builder_sites"),
@@ -32,11 +33,37 @@ public final class BuilderSiteSavedData extends SavedData {
     private final int dataVersion;
     private final Map<UUID, BuilderSite> sites = new LinkedHashMap<>();
 
-    public BuilderSiteSavedData() {
-        this(DATA_VERSION, List.of());
+    private final Map<UUID, BuilderProject> projects = new LinkedHashMap<>();
+
+    public synchronized List<BuilderProject> projects() {
+        return List.copyOf(projects.values());
     }
 
-    private BuilderSiteSavedData(int dataVersion, List<BuilderSite> persistedSites) {
+    public synchronized boolean submit(BuilderProject project, UUID actor) {
+        if (!project.owner().equals(actor) || projects.containsKey(project.zone())) return false;
+        projects.put(project.zone(), project);
+        setDirty();
+        return true;
+    }
+
+    public synchronized boolean cancelProject(UUID zone, UUID actor) {
+        BuilderProject project = projects.get(zone);
+        if (project == null || !project.owner().equals(actor)) return false;
+        projects.remove(zone);
+        setDirty();
+        return true;
+    }
+
+    public synchronized void observe(BuilderProject project, int ticks) {
+        if (projects.replace(project.zone(), project, project.observe(ticks))) setDirty();
+    }
+
+    public BuilderSiteSavedData() {
+        this(DATA_VERSION, List.of(), List.of());
+    }
+
+    private BuilderSiteSavedData(int dataVersion, List<BuilderSite> persistedSites, List<BuilderProject> pending) {
+        pending.forEach(project -> projects.putIfAbsent(project.zone(), project));
         this.dataVersion = Math.max(DATA_VERSION, dataVersion);
         persistedSites.forEach(site -> sites.putIfAbsent(site.builderVillagerId(), site));
     }

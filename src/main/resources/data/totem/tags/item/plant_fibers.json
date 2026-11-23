@@ -6,6 +6,7 @@
     "minecraft:tall_grass",
     "minecraft:fern",
     "minecraft:large_fern",
-    "minecraft:hanging_roots"
+    "minecraft:hanging_roots",
+    "#totem:lumberjack_tree_fibers"
   ]
 }

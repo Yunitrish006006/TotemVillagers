@@ -48,10 +48,35 @@ public final class FarmerWorldWorkAction {
     ) {
         CropDefinition crop = definition(order).orElse(null);
         if (crop == null || !isMature(level, cropPosition, crop)
-                || !isFarmer(farmer)
+                || !(isFarmer(farmer) || dev.totem.villagers.runtime.StarterWheatField.owns(level, farmer, cropPosition))
+                || dev.totem.villagers.worker.ProductionParcel.get(level.getServer()).heldByAnother(level, cropPosition.below(), farmer)
+                || dev.totem.villagers.worker.WorkerAssignmentSavedData.forServer(level.getServer())
+                    .containsZoneCell(level.dimension().identifier().toString(), cropPosition.below())
                 || !WorldWorkPermissions.mayWork(level, farmer, cropPosition)) {
             return false;
         }
+        return harvest(level, farmer, cropPosition, crop, inventory);
+    }
+
+    /** A helper works one mature crop for an incapacitated caretaker without acquiring the parcel. */
+    public boolean helpHarvest(ServerLevel level, Villager helper, Villager caretaker, BlockPos pos, WorkOrder order) {
+        if (!dev.totem.villagers.runtime.EmergencyFieldWork.mayHelp(level, helper, caretaker)
+                || helper.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(pos)) > 9
+                || !WorldWorkPermissions.mayWork(level, helper, pos) || !WorldWorkPermissions.mayWork(level, helper, pos.below())
+                || !WorldWorkPermissions.mayWork(level, caretaker, pos) || !WorldWorkPermissions.mayWork(level, caretaker, pos.below())
+                || dev.totem.villagers.worker.WorkerAssignmentSavedData.forServer(level.getServer())
+                    .containsZoneCell(level.dimension().identifier().toString(), pos.below())) return false;
+        var parcels = dev.totem.villagers.worker.ProductionParcel.get(level.getServer());
+        parcels.reconcile(level, caretaker);
+        if (parcels.claim(caretaker.getUUID()).filter(c -> c.role().equals("minecraft:farmer")
+                && c.cells().contains(pos.below())).isEmpty()) return false;
+        var crop = definition(order).orElse(null);
+        return crop != null && isMature(level, pos, crop) && harvest(level, helper, pos, crop,
+                dev.totem.villagers.inventory.VillagerWorkInventorySavedData.forServer(level.getServer()).inventory(helper.getUUID()));
+    }
+
+    private boolean harvest(ServerLevel level, Villager farmer, BlockPos cropPosition, CropDefinition crop,
+                            VillagerWorkInventory inventory) {
         BlockState original = level.getBlockState(cropPosition);
         ItemStack hoe = bestHoe(inventory).orElse(null);
         if (hoe == null) {
@@ -80,6 +105,8 @@ public final class FarmerWorldWorkAction {
             return false;
         }
         if (reservation.commitWithReturns(List.copyOf(returned))) {
+            if (stored.stream().anyMatch(s -> dev.totem.villagers.needs.VillagerNutrition.nutrition(s) > 0))
+                dev.totem.villagers.runtime.VillageFoodForecast.delivered(level, farmer);
             applyStoredBoneMeal(level, cropPosition, inventory);
             farmer.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
             farmer.playWorkSound();
@@ -101,6 +128,13 @@ public final class FarmerWorldWorkAction {
         if (!BoneMealItem.growCrop(stored, level, cropPosition)) {
             inventory.insertExact(stored);
         }
+    }
+
+    public static boolean growsFood(ServerLevel level, BlockPos crop) {
+        var definition = CROPS_BY_BLOCK.get(level.getBlockState(crop).getBlock());
+        if (definition == null) return false;
+        var order = dev.totem.villagers.work.WorkOrderDefinitions.catalog().snapshot().get(definition.orderId());
+        return order != null && order.allowedSources().contains(dev.totem.villagers.work.WorkSource.WORLD);
     }
 
     public boolean hasUsableHoe(VillagerWorkInventory inventory) {
@@ -179,11 +213,16 @@ public final class FarmerWorldWorkAction {
         return null;
     }
 
-    private static Optional<ItemStack> bestHoe(VillagerWorkInventory inventory) {
+    public static Optional<ItemStack> bestHoe(VillagerWorkInventory inventory) {
         return inventory.snapshot().stream()
                 .filter(stack -> !stack.isEmpty() && isHoe(stack))
                 .map(stack -> stack.copyWithCount(1))
                 .max(Comparator.comparingInt(FarmerWorldWorkAction::remainingDurability));
+    }
+
+    public static boolean needsReplacementHoe(VillagerWorkInventory inventory) {
+        return inventory.snapshot().stream().filter(FarmerWorldWorkAction::isHoe)
+                .mapToInt(stack -> Math.min(5, remainingDurability(stack)) * stack.getCount()).sum() <= 4;
     }
 
     private static boolean isHoe(ItemStack stack) {
@@ -196,7 +235,7 @@ public final class FarmerWorldWorkAction {
         return stack.isDamageableItem() ? stack.getMaxDamage() - stack.getDamageValue() : Integer.MAX_VALUE;
     }
 
-    private static ItemStack wearOnce(ItemStack tool) {
+    public static ItemStack wearOnce(ItemStack tool) {
         ItemStack worn = tool.copy();
         if (!worn.isDamageableItem()) {
             return worn;

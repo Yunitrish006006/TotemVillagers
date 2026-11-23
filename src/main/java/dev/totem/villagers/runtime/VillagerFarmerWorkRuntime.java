@@ -1,5 +1,7 @@
 package dev.totem.villagers.runtime;
 
+import dev.totem.villagers.worker.ProductionParcel;
+
 import dev.totem.villagers.config.WorkBackedTradingMode;
 import dev.totem.villagers.config.WorkBackedTradingSettingsSavedData;
 import dev.totem.villagers.inventory.VillagerWorkInventory;
@@ -102,6 +104,21 @@ public final class VillagerFarmerWorkRuntime {
             return;
         }
         Optional<FarmerContext> context = resolveContext(level, farmer, inventories);
+        if (context.isPresent()) {
+            VillagerHeadStatus.clear(farmer, VillagerHeadStatus.Kind.COMPOSTER);
+            if (ACTION.hasUsableHoe(context.get().inventory())) VillagerHeadStatus.clear(farmer, VillagerHeadStatus.Kind.HOE,
+                    VillagerHeadStatus.Kind.TABLE, VillagerHeadStatus.Kind.WOOD, VillagerHeadStatus.Kind.UNREACHABLE);
+        } else if (!farmer.isSleeping() && !inDanger(farmer)) {
+            var site = farmer.getBrain().getMemory(MemoryModuleType.JOB_SITE).orElse(null);
+            if (site == null || site.dimension().equals(level.dimension()) && level.isLoaded(site.pos()))
+                VillagerHeadStatus.report(farmer, VillagerHeadStatus.Kind.COMPOSTER);
+        }
+        if (state.activeWork().isEmpty() && context.isPresent() && !farmer.isBaby() && farmer.isAlive()
+                && !farmer.isSleeping() && !inDanger(farmer) && !level.isRaided(farmer.blockPosition())
+                && !farmer.isTrading() && FarmerWorldWorkAction.needsReplacementHoe(context.get().inventory())) {
+            if (!ACTION.hasUsableHoe(context.get().inventory())) VillagerHeadStatus.report(farmer, VillagerHeadStatus.Kind.HOE);
+            tryReplaceHoe(level, farmer, context.get(), inventories);
+        }
         List<WorkCandidate> candidates = context.map(value -> candidates(level, farmer, state, value, catalog)).orElseGet(List::of);
         Optional<BlockPos> activeCrop = state.activeWork().flatMap(active -> active.worldTarget())
                 .flatMap(WorldWorkTarget::packedBlockPosition).map(BlockPos::of);
@@ -125,6 +142,25 @@ public final class VillagerFarmerWorkRuntime {
         }
         if (!next.equals(state)) {
             states.put(next);
+        }
+    }
+
+    private static void tryReplaceHoe(ServerLevel level, Villager farmer, FarmerContext context,
+                                      VillagerWorkInventorySavedData inventories) {
+        VillagerWorkInventory inventory = context.inventory();
+        BlockPos composter = context.jobSite().pos();
+        // A small work area around the assigned farm. Never inspect containers or load adjacent chunks.
+        var table = VillageWorktable.near(level, farmer, composter);
+        if (table.isEmpty()) {
+            VillageWorktable.prepareTable(level, farmer, composter, inventory, inventories);
+            return;
+        }
+        BlockPos pos = table.get();
+        if (VillageWorktable.seekMissingWood(level, farmer, inventory, inventories, 2)) return;
+        if (HouseholdSurvivalRuntime.atTable(farmer, pos) && VillageWoodCrafting.prepareHoe(level, inventory)) {
+            VillagerHeadStatus.clear(farmer, VillagerHeadStatus.Kind.HOE, VillagerHeadStatus.Kind.UNREACHABLE);
+            VillagerHeadStatus.report(farmer, VillagerHeadStatus.Kind.MAKING_TOOL);
+            farmer.playWorkSound();
         }
     }
 
@@ -201,6 +237,12 @@ public final class VillagerFarmerWorkRuntime {
         return Optional.of(new FarmerContext(jobSite, inventories.inventory(farmer.getUUID())));
     }
 
+    private static boolean reachableCrop(Villager farmer, BlockPos crop) {
+        if (farmer.blockPosition().distSqr(crop) <= 4) return true;
+        var path = farmer.getNavigation().createPath(crop, 1);
+        return path != null && path.canReach();
+    }
+
     private static boolean validCropTarget(ServerLevel level, Villager farmer, FarmerContext context,
                                            BlockPos crop, WorkOrder order, boolean requirePath) {
         return ACTION.supports(order)
@@ -208,8 +250,10 @@ public final class VillagerFarmerWorkRuntime {
                 && ACTION.isMatureCrop(level, crop, order)
                 && crop.distSqr(context.jobSite().pos()) <= (double) FARM_RADIUS * FARM_RADIUS
                 && WorldWorkPermissions.mayWork(level, farmer, crop)
-                && (!requirePath || farmer.getNavigation().createPath(crop, 0) != null)
-                && ACTION.primaryHarvest(order).filter(context.inventory()::canInsertExact).isPresent();
+                && (!requirePath || reachableCrop(farmer, crop))
+                && ACTION.primaryHarvest(order).filter(context.inventory()::canInsertExact).isPresent()
+                && ProductionParcel.get(level.getServer())
+                    .acquire(level, farmer, context.jobSite(), crop.below(), true);
     }
 
     private static Optional<LocatedCrop> findCrop(ServerLevel level, Villager farmer, FarmerContext context,

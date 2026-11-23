@@ -8,6 +8,7 @@
     "MerchantScreenTradeSnapshotMixin",
     "VillagerModelWorkAnimationMixin",
     "VillagerRenderStateWorkAnimationMixin",
+    "VillagerStatusLabelMixin",
     "VillagerRendererWorkToolMixin"
   ],
   "injectors": {

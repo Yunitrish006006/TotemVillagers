@@ -78,6 +78,16 @@ public final class VillagerWorkInventorySavedData extends SavedData {
         setDirty();
     }
 
+    /** Independent inventories for checking several hypothetical market transactions against the same stocks. */
+    public synchronized VillagerWorkInventorySavedData copyAccounts(java.util.Collection<UUID> residents) {
+        var result = new VillagerWorkInventorySavedData();
+        for (var id : residents) {
+            var slots = inventories.get(id);
+            if (slots != null) result.inventories.put(id, copy(slots));
+        }
+        return result;
+    }
+
     /** Removes and returns every protected stack when a villager dies. */
     public synchronized List<ItemStack> drain(UUID villagerId) {
         List<ItemStack> removed = inventories.remove(villagerId);

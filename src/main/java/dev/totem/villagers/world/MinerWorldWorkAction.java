@@ -44,6 +44,11 @@ public final class MinerWorldWorkAction {
 
     public boolean complete(ServerLevel level, Villager miner, BlockPos target, TagKey<Block> eligibleTargets, WorkOrder order,
                             VillagerWorkInventory inventory) {
+        return completeForOrder(level, miner, target, eligibleTargets, order, inventory, ItemStack.EMPTY);
+    }
+
+    public boolean completeForOrder(ServerLevel level, Villager miner, BlockPos target, TagKey<Block> eligibleTargets,
+                                    WorkOrder order, VillagerWorkInventory inventory, ItemStack promised) {
         if (!"totem:miner".equals(order.professionId())
                 || !level.isLoaded(target)
                 || !WorldWorkNavigation.isWithinReach(miner, target)
@@ -52,7 +57,7 @@ public final class MinerWorldWorkAction {
             return false;
         }
         BlockState original = level.getBlockState(target);
-        Optional<MiningPlan> planned = planMining(level, miner, target, original, inventory);
+        Optional<MiningPlan> planned = planMining(level, miner, target, original, inventory, promised);
         if (planned.isEmpty()) {
             return false;
         }
@@ -91,9 +96,9 @@ public final class MinerWorldWorkAction {
 
     /** Chooses the strongest personal pickaxe that produces a real loot-table result for this block. */
     private Optional<MiningPlan> planMining(ServerLevel level, Villager miner, BlockPos target, BlockState original,
-                                            VillagerWorkInventory inventory) {
+                                            VillagerWorkInventory inventory, ItemStack promised) {
         Optional<MiningPlan> basePlan = inventory.snapshot().stream()
-                .filter(stack -> !stack.isEmpty() && pickaxeRank(stack) >= 0 && stack.isCorrectToolForDrops(original))
+                .filter(stack -> canMine(stack, original))
                 .map(stack -> stack.copyWithCount(1))
                 .sorted(Comparator.comparingInt(MinerWorldWorkAction::pickaxeRank).reversed())
                 .map(tool -> new MiningPlan(tool, Block.getDrops(original, level, target, null, miner, tool).stream()
@@ -101,6 +106,8 @@ public final class MinerWorldWorkAction {
                         .map(ItemStack::copy)
                         .toList(), false))
                 .filter(plan -> !plan.drops().isEmpty())
+                .filter(plan -> promised.isEmpty() || plan.drops().stream().anyMatch(stack ->
+                        ItemStack.isSameItemSameComponents(stack, promised) && stack.getCount() >= promised.getCount()))
                 .findFirst();
         if (basePlan.isEmpty()) {
             return Optional.empty();
@@ -187,6 +194,11 @@ public final class MinerWorldWorkAction {
         }
         worn.setDamageValue(worn.getDamageValue() + 1);
         return worn;
+    }
+
+    public static boolean canMine(ItemStack stack, BlockState state) {
+        return !stack.isEmpty() && pickaxeRank(stack) >= 0 && stack.isCorrectToolForDrops(state)
+                && stack.getDamageValue() < stack.getMaxDamage();
     }
 
     private static int pickaxeRank(ItemStack stack) {

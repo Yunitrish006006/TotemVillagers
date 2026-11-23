@@ -16,6 +16,7 @@ import dev.totem.villagers.workshop.WorkshopCommitResult;
 import dev.totem.villagers.workshop.WorkshopCommitService;
 import dev.totem.villagers.world.FishingRodUse;
 import dev.totem.villagers.world.ToolsmithFiberWorldWorkAction;
+import dev.totem.villagers.world.LumberjackWorldWorkAction;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -62,12 +63,11 @@ public final class ToolsmithVillageEconomyRuntime {
     private static final int MIN_IRON_SMELT_BATCH = 2;
     private static final int MIN_COPPER_SMELT_BATCH = 3;
     /** One log yields eight live-recipe sticks, enough handles for two ordinary three-stick tools. */
-    private static final int WOOD_PRICE = 2;
+    static final int WOOD_PRICE = 2;
     private static final int STICK_PRICE = 1;
     private static final int FISHING_ROD_PRICE = 3;
     private static final int FISHING_ROD_PREORDER_DURABILITY = 32;
     private static final int STRING_BATCH = 2;
-    private static final int FIBRES_PER_STRING = 3;
     private static final int SHEARS_IRON_PRICE = 2;
     private static final int MINERAL_RESERVE_BATCH = 3;
     private static final int MINERAL_RESERVE_TARGET = 6;
@@ -77,8 +77,6 @@ public final class ToolsmithVillageEconomyRuntime {
     private static final int FIBRE_SEARCH_VERTICAL = 4;
     private static final TagKey<Block> FIBRE_PLANTS = TagKey.create(Registries.BLOCK,
             Identifier.fromNamespaceAndPath("totem", "toolsmith_fiber_plants"));
-    private static final TagKey<Item> PLANT_FIBRES = TagKey.create(Registries.ITEM,
-            Identifier.fromNamespaceAndPath("totem", "plant_fibers"));
     private static final ToolsmithFiberWorldWorkAction FIBRE_HARVEST = new ToolsmithFiberWorldWorkAction();
     private static final WorkshopCommitService COMMITS = new WorkshopCommitService();
 
@@ -86,6 +84,7 @@ public final class ToolsmithVillageEconomyRuntime {
     }
 
     public static void register() {
+        VillageWorkshopApprenticeship.register();
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (server.getTickCount() % PROCESS_INTERVAL_TICKS == 0) {
                 process(server);
@@ -108,7 +107,7 @@ public final class ToolsmithVillageEconomyRuntime {
             villagers.stream().filter(villager -> isProfession(villager, "totem:miner"))
                     .forEach(miner -> smeltMetals(level, miner, inventories.inventory(miner.getUUID())));
             villagers.stream().filter(villager -> isProfession(villager, "minecraft:toolsmith"))
-                    .forEach(toolsmith -> serveResourceWorker(level, toolsmith, villagers, inventories));
+                    .forEach(toolsmith -> serveResourceWorker(level, toolsmith, villagers, inventories, level.getGameTime()));
         }
     }
 
@@ -188,8 +187,8 @@ public final class ToolsmithVillageEconomyRuntime {
         return count(inventory, Items.COAL) > 0 ? Items.COAL : null;
     }
 
-    private static void serveResourceWorker(ServerLevel level, Villager toolsmith, List<? extends Villager> villagers,
-                                            VillagerWorkInventorySavedData inventories) {
+    static void serveResourceWorker(ServerLevel level, Villager toolsmith, List<? extends Villager> villagers,
+                                            VillagerWorkInventorySavedData inventories, long now) {
         if (!VillagerWorkNeeds.canWork(toolsmith)
                 || VillagerWorkSavedData.forServer(level.getServer()).getOrCreate(toolsmith.getUUID()).activeWork().isPresent()) {
             return;
@@ -203,12 +202,14 @@ public final class ToolsmithVillageEconomyRuntime {
         }
         ToolRequest request = nextRequest(toolsmith, villagers, inventories).orElse(null);
         if (request == null) {
+            HouseholdResourceRequests.clearStone(toolsmith);
             maintainToolMineralReserve(toolsmith, villagers, inventories);
             return;
         }
         VillagerWorkInventory inventory = inventories.inventory(toolsmith.getUUID());
         if (sellTool(toolsmith, request.worker(), inventory,
                 inventories.inventory(request.worker().getUUID()), request.tool(), villagers, inventories)) {
+            HouseholdResourceRequests.clearStone(toolsmith);
             return;
         }
         if (count(inventory, Items.STICK) < 2) {
@@ -217,7 +218,7 @@ public final class ToolsmithVillageEconomyRuntime {
             if (hasProcessableWood && !atStationOrNavigate(toolsmith, smithingTable)) {
                 return;
             }
-            if (hasProcessableWood && (craftSticks(level, inventory) || craftPlanks(level, inventory))) {
+            if (hasProcessableWood && (VillageWoodCrafting.craftSticks(level, inventory) || VillageWoodCrafting.craftPlanks(level, inventory))) {
                 toolsmith.playWorkSound();
                 return;
             }
@@ -229,6 +230,7 @@ public final class ToolsmithVillageEconomyRuntime {
             return;
         }
         if (count(inventory, Items.IRON_INGOT) >= request.tool().materialCount()) {
+            HouseholdResourceRequests.clearStone(toolsmith);
             if (atStationOrNavigate(toolsmith, smithingTable)) {
                 forge(level, toolsmith, smithingTable, inventory, request.tool().ironOrderId());
             }
@@ -240,6 +242,7 @@ public final class ToolsmithVillageEconomyRuntime {
             return;
         }
         if (count(inventory, Items.COPPER_INGOT) >= request.tool().materialCount()) {
+            HouseholdResourceRequests.clearStone(toolsmith);
             if (atStationOrNavigate(toolsmith, smithingTable)) {
                 forge(level, toolsmith, smithingTable, inventory, request.tool().copperOrderId());
             }
@@ -251,14 +254,17 @@ public final class ToolsmithVillageEconomyRuntime {
             return;
         }
         if (count(inventory, Items.COBBLESTONE) >= request.tool().materialCount()) {
+            HouseholdResourceRequests.clearStone(toolsmith);
             if (atStationOrNavigate(toolsmith, smithingTable)) {
                 forge(level, toolsmith, smithingTable, inventory, request.tool().stoneOrderId());
             }
             return;
         }
-        buyFromProfessionWithSharedPayment(toolsmith, "totem:miner",
+        if (!buyFromProfessionWithSharedPayment(toolsmith, "totem:miner",
                 new ItemStack(Items.COBBLESTONE, request.tool().materialCount()),
-                request.tool().materialCount(), request.tool().stoneMaterialPrice(), villagers, inventories);
+                request.tool().materialCount(), request.tool().stoneMaterialPrice(), villagers, inventories)) {
+            HouseholdQuarry.request(level, toolsmith, inventories, now);
+        } else HouseholdResourceRequests.clearStone(toolsmith);
     }
 
     /**
@@ -326,7 +332,7 @@ public final class ToolsmithVillageEconomyRuntime {
             if (hasProcessableWood && !atStationOrNavigate(toolsmith, smithingTable)) {
                 return true;
             }
-            if (hasProcessableWood && (craftSticks(level, toolsmithInventory) || craftPlanks(level, toolsmithInventory))) {
+            if (hasProcessableWood && (VillageWoodCrafting.craftSticks(level, toolsmithInventory) || VillageWoodCrafting.craftPlanks(level, toolsmithInventory))) {
                 toolsmith.playWorkSound();
                 return true;
             }
@@ -381,7 +387,7 @@ public final class ToolsmithVillageEconomyRuntime {
     }
 
     /**
-     * Builds string only from plants that were physically cut with shears. Both the fibre recipe and any replacement
+     * Builds string from gathered grass, harvested foliage, or sheared plants. Both the fibre recipe and any replacement
      * shears are resolved through the world's current player crafting recipes, so a data pack can alter or disable
      * either path without villagers retaining a hidden recipe.
      */
@@ -392,12 +398,12 @@ public final class ToolsmithVillageEconomyRuntime {
         if (buyMissingString(toolsmith, inventory, villagers, inventories)) {
             return true;
         }
-        List<ItemStack> fibreInputs = plantFibreInputs(inventory);
-        if (fibreInputs.size() == FIBRES_PER_STRING) {
+        List<ItemStack> fibreInputs = VillageWoodCrafting.plantFibreInputs(inventory);
+        if (fibreInputs.size() == VillageWoodCrafting.FIBRES_PER_STRING) {
             if (!atStationOrNavigate(toolsmith, smithingTable)) {
                 return true;
             }
-            if (craftPlantFibreString(level, inventory, fibreInputs)) {
+            if (VillageWoodCrafting.craftPlantFibreString(level, inventory, fibreInputs)) {
                 toolsmith.playWorkSound();
                 return true;
             }
@@ -419,16 +425,27 @@ public final class ToolsmithVillageEconomyRuntime {
                     new ItemStack(Items.IRON_INGOT, 2), 2, SHEARS_IRON_PRICE, villagers, inventories)) {
                 return true;
             }
-        } else {
-            BlockPos target = nearestFibrePlant(level, toolsmith, smithingTable).orElse(null);
-            if (target != null) {
-                if (toolsmith.distanceToSqr(Vec3.atCenterOf(target)) > WORK_REACH_SQUARED) {
-                    toolsmith.getNavigation().moveTo(target.getX() + .5D, target.getY(), target.getZ() + .5D, .5D);
+        }
+        boolean useShears = hasUsableShears(inventory);
+        if (!useShears) {
+            int missing = VillageWoodCrafting.FIBRES_PER_STRING - fibreInputs.size();
+            for (var leaf : BuiltInRegistries.ITEM.getTagOrEmpty(LumberjackWorldWorkAction.TREE_FIBRES)) {
+                ItemStack batch = new ItemStack(leaf.value(), missing);
+                if (batch.is(VillageWoodCrafting.PLANT_FIBRES) && buyFromProfession(toolsmith, "totem:lumberjack", batch,
+                        missing, 1, villagers, inventories)) {
                     return true;
                 }
-                if (FIBRE_HARVEST.complete(level, toolsmith, target, FIBRE_PLANTS, PLANT_FIBRES, inventory)) {
-                    return true;
-                }
+            }
+        }
+        BlockPos target = nearestFibrePlant(level, toolsmith, smithingTable, useShears).orElse(null);
+        if (target != null) {
+            if (toolsmith.distanceToSqr(Vec3.atCenterOf(target)) > WORK_REACH_SQUARED) {
+                toolsmith.getNavigation().moveTo(target.getX() + .5D, target.getY(), target.getZ() + .5D, .5D);
+                return true;
+            }
+            if (useShears ? FIBRE_HARVEST.complete(level, toolsmith, target, FIBRE_PLANTS, VillageWoodCrafting.PLANT_FIBRES, inventory)
+                    : FIBRE_HARVEST.gatherGrass(level, toolsmith, target, VillageWoodCrafting.PLANT_FIBRES, inventory)) {
+                return true;
             }
         }
         return buyMissingString(toolsmith, inventory, villagers, inventories);
@@ -446,6 +463,83 @@ public final class ToolsmithVillageEconomyRuntime {
         return buyFromProfession(toolsmith, "minecraft:fisherman", string, missing, 1, villagers, inventories)
                 || communitySponsorBuyFromProfession(toolsmith, "minecraft:fisherman",
                 string, missing, 1, villagers, inventories);
+    }
+
+    /** Verify actual outstanding orders in the outgoing smith's service area against one backup's physical stock. */
+    static boolean canCoverOrders(ServerLevel level, Villager departing, Villager backup) {
+        if (VillagerWorkSavedData.forServer(level.getServer()).get(backup.getUUID())
+                .filter(state -> state.activeWork().isPresent()).isPresent()) return false;
+        var inventories = VillagerWorkInventorySavedData.forServer(level.getServer());
+        var recipients = LoadedVillagerCache.loaded(level).stream().filter(v -> v.isAlive() && !v.isBaby()
+                        && (departing.distanceToSqr(v) <= SEARCH_RANGE_SQUARED || backup.distanceToSqr(v) <= SEARCH_RANGE_SQUARED))
+                .sorted(Comparator.comparingInt((Villager v) -> servicePriority(v)).thenComparingDouble(backup::distanceToSqr)).toList();
+        var projection = inventories.copyAccounts(recipients.stream().map(Villager::getUUID).toList());
+        var remaining = projection.inventory(backup.getUUID());
+        boolean pending = false;
+        for (var recipient : recipients) {
+            var stock = projection.inventory(recipient.getUUID());
+            boolean rod = isProfession(recipient, "minecraft:fisherman") && needsFishingRodOrder(stock);
+            ReplacementTool tool = null;
+            for (var option : ReplacementTool.values()) {
+                if (isProfession(recipient, option.professionId()) && !option.hasUsableTool(stock)) tool = option;
+            }
+            if (!rod && tool == null) continue;
+            if (backup.distanceToSqr(recipient) > SEARCH_RANGE_SQUARED) return false;
+            if (backup.distanceToSqr(recipient) > EXCHANGE_REACH_SQUARED || !recipient.hasLineOfSight(backup)) {
+                var path = recipient.getNavigation().createPath(backup, 1);
+                if (path == null || !path.canReach()) return false;
+            }
+            pending = true;
+            if (rod) {
+                if (!canDeliver(level, remaining, stock, FISHING_ROD_PRICE, Items.FISHING_ROD, "totem:toolsmith_fishing_rod")) return false;
+            } else {
+                var merchandise = saleTool(remaining, tool);
+                if (merchandise != null) {
+                    int price = merchandise.is(tool.ironItem()) ? tool.ironPrice()
+                            : merchandise.is(tool.copperItem()) ? tool.copperPrice() : tool.stonePrice();
+                    if (!exchange(stock, remaining, new ItemStack(Items.EMERALD, price), merchandise)) return false;
+                } else if (count(remaining, Items.IRON_INGOT) >= tool.materialCount()) {
+                    if (!canDeliver(level, remaining, stock, tool.ironPrice(), tool.ironItem(), tool.ironOrderId())) return false;
+                } else if (count(remaining, Items.COPPER_INGOT) >= tool.materialCount()) {
+                    if (!canDeliver(level, remaining, stock, tool.copperPrice(), tool.copperItem(), tool.copperOrderId())) return false;
+                } else if (!canDeliver(level, remaining, stock, tool.stonePrice(), tool.stoneItem(), tool.stoneOrderId())) return false;
+            }
+        }
+        if (pending) return true;
+        return (count(remaining, Items.STONE_PICKAXE) > 0 && count(remaining, Items.STONE_AXE) > 0 && count(remaining, Items.STONE_HOE) > 0)
+                || count(remaining, Items.COBBLESTONE) >= 3 && count(remaining, Items.STICK) >= 2
+                && RecipeBackedWorkshopAction.hasToolRecipe(level, WorkOrderDefinitions.catalog().snapshot().get(ReplacementTool.PICKAXE.stoneOrderId()));
+    }
+
+    private static int servicePriority(Villager recipient) {
+        if (isProfession(recipient, "minecraft:fisherman")) return -1;
+        for (var tool : ReplacementTool.values()) if (isProfession(recipient, tool.professionId())) return tool.ordinal();
+        return Integer.MAX_VALUE;
+    }
+
+    private static boolean canDeliver(ServerLevel level, VillagerWorkInventory seller, VillagerWorkInventory buyer,
+                                      int price, Item output, String orderId) {
+        var expected = new ItemStack(output);
+        var payment = new ItemStack(Items.EMERALD, price);
+        if (seller.countMatchingItem(expected) > (output == Items.IRON_PICKAXE ? 1 : 0)) {
+            return exchange(buyer, seller, payment, expected);
+        }
+        if (output == Items.IRON_PICKAXE && seller.countMatchingItem(expected) == 0) return false;
+        var order = WorkOrderDefinitions.catalog().snapshot().get(orderId);
+        if (!RecipeBackedWorkshopAction.hasToolRecipe(level, order) || !order.matchesOutput(expected, level.registryAccess())) return false;
+        var hold = seller.reserveExact(order.requiredInputs()).orElse(null);
+        if (hold == null) return false;
+        if (!seller.insertExact(expected)) {
+            hold.rollback();
+            return false;
+        }
+        if (!exchange(buyer, seller, payment, expected)) {
+            seller.takeExactMatchingItem(expected).orElseThrow();
+            hold.rollback();
+            return false;
+        }
+        hold.commit();
+        return true;
     }
 
     private static Optional<ToolRequest> nextRequest(Villager toolsmith, List<? extends Villager> villagers,
@@ -478,11 +572,8 @@ public final class ToolsmithVillageEconomyRuntime {
         return false;
     }
 
-    private static boolean sellTool(Villager toolsmith, Villager worker,
-                                    VillagerWorkInventory seller, VillagerWorkInventory buyer,
-                                    ReplacementTool tool, List<? extends Villager> villagers,
-                                    VillagerWorkInventorySavedData inventories) {
-        ItemStack merchandise = seller.snapshot().stream()
+    private static ItemStack saleTool(VillagerWorkInventory seller, ReplacementTool tool) {
+        return seller.snapshot().stream()
                 .filter(stack -> stack.is(tool.ironItem()) || stack.is(tool.copperItem()) || stack.is(tool.stoneItem()))
                 .filter(stack -> !stack.isDamaged())
                 // The Toolsmith's own founding iron pickaxe is work/render equipment, not merchant stock.
@@ -491,6 +582,13 @@ public final class ToolsmithVillageEconomyRuntime {
                 .map(stack -> stack.copyWithCount(1))
                 .max(Comparator.comparingInt(stack -> stack.is(tool.ironItem()) ? 2
                         : stack.is(tool.copperItem()) ? 1 : 0)).orElse(null);
+    }
+
+    private static boolean sellTool(Villager toolsmith, Villager worker,
+                                    VillagerWorkInventory seller, VillagerWorkInventory buyer,
+                                    ReplacementTool tool, List<? extends Villager> villagers,
+                                    VillagerWorkInventorySavedData inventories) {
+        ItemStack merchandise = saleTool(seller, tool);
         if (merchandise == null) {
             return false;
         }
@@ -541,23 +639,23 @@ public final class ToolsmithVillageEconomyRuntime {
                                                                List<? extends Villager> villagers,
                                                                VillagerWorkInventorySavedData inventories) {
         ItemStack batch = material.copyWithCount(count);
-        Villager seller = villagers.stream().filter(candidate -> candidate != buyer)
+        var suppliers = villagers.stream().filter(candidate -> candidate != buyer)
                 .filter(candidate -> isProfession(candidate, sellerProfession))
                 .filter(VillagerWorkNeeds::canWork)
                 .filter(candidate -> buyer.distanceToSqr(candidate) <= SEARCH_RANGE_SQUARED)
                 .filter(candidate -> inventories.inventory(candidate.getUUID()).countMatchingItem(batch) >= count)
-                .min(Comparator.comparingDouble(buyer::distanceToSqr)).orElse(null);
-        if (seller == null) {
-            return false;
-        }
-        if (buyer.distanceToSqr(seller) > EXCHANGE_REACH_SQUARED) {
-            buyer.getNavigation().moveTo(seller, .5D);
-            return true;
-        }
+                .sorted(Comparator.comparingDouble(buyer::distanceToSqr)).toList();
         ItemStack payment = new ItemStack(Items.EMERALD, price);
-        return exchange(inventories.inventory(buyer.getUUID()), inventories.inventory(seller.getUUID()),
-                payment, batch)
-                || sponsoredFinishedToolExchange(buyer, seller, villagers, inventories, payment, batch);
+        for (var seller : suppliers) {
+            if (buyer.distanceToSqr(seller) > EXCHANGE_REACH_SQUARED || !buyer.hasLineOfSight(seller)) {
+                var path = buyer.getNavigation().createPath(seller, 0);
+                if (path != null && path.canReach() && path.getNodeCount() > 1 && buyer.getNavigation().moveTo(path, .5D)) return true;
+                continue;
+            }
+            if (exchange(inventories.inventory(buyer.getUUID()), inventories.inventory(seller.getUUID()), payment, batch)
+                    || sponsoredFinishedToolExchange(buyer, seller, villagers, inventories, payment, batch)) return true;
+        }
+        return false;
     }
 
     /**
@@ -595,7 +693,7 @@ public final class ToolsmithVillageEconomyRuntime {
                 inventories.inventory(seller.getUUID()), new ItemStack(Items.EMERALD, price), batch);
     }
 
-    private static boolean buyLogs(Villager buyer, List<? extends Villager> villagers,
+    static boolean buyLogs(Villager buyer, List<? extends Villager> villagers,
                                    VillagerWorkInventorySavedData inventories) {
         Optional<LogSupplier> supplier = villagers.stream().filter(candidate -> candidate != buyer)
                 .filter(candidate -> isProfession(candidate, "totem:lumberjack"))
@@ -605,14 +703,20 @@ public final class ToolsmithVillageEconomyRuntime {
                         .filter(stack -> stack.is(ItemTags.LOGS) && stack.getCount() >= WOOD_BATCH)
                         .findFirst().map(stack -> new LogSupplier(candidate, stack.copyWithCount(WOOD_BATCH))))
                 .flatMap(Optional::stream)
-                .min(Comparator.comparingDouble(entry -> buyer.distanceToSqr(entry.villager())));
+                .filter(entry -> {
+                    if (buyer.distanceToSqr(entry.villager()) <= EXCHANGE_REACH_SQUARED && buyer.hasLineOfSight(entry.villager())) return true;
+                    var path = buyer.getNavigation().createPath(entry.villager().blockPosition(), 1);
+                    return path != null && path.canReach();
+                }).min(Comparator.comparingDouble(entry -> buyer.distanceToSqr(entry.villager())));
         if (supplier.isEmpty()) {
-            return false;
+            var level = (ServerLevel) buyer.level();
+            return HouseholdForestry.request(level, buyer, inventories, level.getGameTime());
         }
+        HouseholdForestry.clear(buyer);
         LogSupplier selected = supplier.orElseThrow();
-        if (buyer.distanceToSqr(selected.villager()) > EXCHANGE_REACH_SQUARED) {
-            buyer.getNavigation().moveTo(selected.villager(), .5D);
-            return true;
+        if (buyer.distanceToSqr(selected.villager()) > EXCHANGE_REACH_SQUARED || !buyer.hasLineOfSight(selected.villager())) {
+            var path = buyer.getNavigation().createPath(selected.villager().blockPosition(), 1);
+            return path != null && path.canReach() && buyer.getNavigation().moveTo(path, .5D);
         }
         ItemStack payment = new ItemStack(Items.EMERALD, WOOD_PRICE);
         return exchange(inventories.inventory(buyer.getUUID()), inventories.inventory(selected.villager().getUUID()),
@@ -817,101 +921,6 @@ public final class ToolsmithVillageEconomyRuntime {
         }
     }
 
-    private static boolean craftPlanks(ServerLevel level, VillagerWorkInventory inventory) {
-        ItemStack log = inventory.snapshot().stream().filter(stack -> stack.is(ItemTags.LOGS))
-                .findFirst().map(stack -> stack.copyWithCount(1)).orElse(null);
-        if (log == null) {
-            return false;
-        }
-        CraftingInput input = CraftingInput.of(1, 1, List.of(log));
-        var recipe = level.recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, level).orElse(null);
-        if (recipe == null || !recipe.value().matches(input, level)) {
-            return false;
-        }
-        ItemStack output = recipe.value().assemble(input);
-        if (output.isEmpty() || !output.is(ItemTags.PLANKS)) {
-            return false;
-        }
-        var reservation = inventory.reserveExactMatchingItem(log).orElse(null);
-        if (reservation == null) {
-            return false;
-        }
-        if (reservation.commitWithReturn(output.copy())) {
-            return true;
-        }
-        reservation.rollback();
-        return false;
-    }
-
-    private static boolean craftSticks(ServerLevel level, VillagerWorkInventory inventory) {
-        ItemStack planks = inventory.snapshot().stream().filter(stack -> stack.is(ItemTags.PLANKS) && stack.getCount() >= 2)
-                .findFirst().map(stack -> stack.copyWithCount(2)).orElse(null);
-        if (planks == null) {
-            return false;
-        }
-        ItemStack one = planks.copyWithCount(1);
-        CraftingInput input = CraftingInput.of(1, 2, List.of(one, one.copy()));
-        var recipe = level.recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, level).orElse(null);
-        if (recipe == null || !recipe.value().matches(input, level)) {
-            return false;
-        }
-        ItemStack output = recipe.value().assemble(input);
-        if (!output.is(Items.STICK) || output.getCount() < 1) {
-            return false;
-        }
-        var reservation = inventory.reserveExactMatchingItem(planks).orElse(null);
-        if (reservation == null) {
-            return false;
-        }
-        if (reservation.commitWithReturn(output.copy())) {
-            return true;
-        }
-        reservation.rollback();
-        return false;
-    }
-
-    private static List<ItemStack> plantFibreInputs(VillagerWorkInventory inventory) {
-        List<ItemStack> inputs = new ArrayList<>(FIBRES_PER_STRING);
-        for (ItemStack stack : inventory.snapshot()) {
-            if (stack.isEmpty() || !stack.is(PLANT_FIBRES)) {
-                continue;
-            }
-            int accepted = Math.min(stack.getCount(), FIBRES_PER_STRING - inputs.size());
-            for (int index = 0; index < accepted; index++) {
-                inputs.add(stack.copyWithCount(1));
-            }
-            if (inputs.size() == FIBRES_PER_STRING) {
-                return List.copyOf(inputs);
-            }
-        }
-        return List.copyOf(inputs);
-    }
-
-    private static boolean craftPlantFibreString(ServerLevel level, VillagerWorkInventory inventory,
-                                                 List<ItemStack> inputs) {
-        if (inputs.size() != FIBRES_PER_STRING || inputs.stream().anyMatch(stack -> !stack.is(PLANT_FIBRES))) {
-            return false;
-        }
-        CraftingInput input = CraftingInput.of(3, 1, inputs);
-        var recipe = level.recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, level).orElse(null);
-        if (recipe == null || !recipe.value().matches(input, level)) {
-            return false;
-        }
-        ItemStack output = recipe.value().assemble(input);
-        if (!output.is(Items.STRING) || output.isEmpty()) {
-            return false;
-        }
-        var reservation = inventory.reserveExactMatching(inputs).orElse(null);
-        if (reservation == null) {
-            return false;
-        }
-        if (reservation.commitWithReturn(output.copy())) {
-            return true;
-        }
-        reservation.rollback();
-        return false;
-    }
-
     private static boolean craftShears(ServerLevel level, VillagerWorkInventory inventory) {
         ItemStack iron = new ItemStack(Items.IRON_INGOT);
         List<ItemStack> slots = List.of(ItemStack.EMPTY, iron, iron.copy(), ItemStack.EMPTY);
@@ -939,7 +948,7 @@ public final class ToolsmithVillageEconomyRuntime {
         return inventory.snapshot().stream().anyMatch(stack -> stack.is(Items.SHEARS));
     }
 
-    private static Optional<BlockPos> nearestFibrePlant(ServerLevel level, Villager toolsmith, BlockPos centre) {
+    private static Optional<BlockPos> nearestFibrePlant(ServerLevel level, Villager toolsmith, BlockPos centre, boolean useShears) {
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
         for (int y = -FIBRE_SEARCH_VERTICAL; y <= FIBRE_SEARCH_VERTICAL; y++) {
@@ -947,6 +956,8 @@ public final class ToolsmithVillageEconomyRuntime {
                 for (int z = -FIBRE_SEARCH_RADIUS; z <= FIBRE_SEARCH_RADIUS; z++) {
                     BlockPos candidate = centre.offset(x, y, z);
                     if (!level.isLoaded(candidate) || !eligibleFibrePlant(level, candidate)
+                            || (!useShears && !level.getBlockState(candidate).is(Blocks.SHORT_GRASS)
+                            && !level.getBlockState(candidate).is(Blocks.TALL_GRASS))
                             || !dev.totem.villagers.world.WorldWorkPermissions.mayWork(level, toolsmith, candidate)) {
                         continue;
                     }
@@ -974,7 +985,8 @@ public final class ToolsmithVillageEconomyRuntime {
     private static Optional<BlockPos> jobSite(ServerLevel level, Villager villager, net.minecraft.world.level.block.Block block) {
         return villager.getBrain().getMemory(MemoryModuleType.JOB_SITE)
                 .filter(site -> site.dimension().equals(level.dimension())).map(GlobalPos::pos)
-                .filter(level::isLoaded).filter(position -> level.getBlockState(position).is(block));
+                .filter(level::isLoaded).filter(position -> level.getBlockState(position).is(block))
+                .filter(position -> block != Blocks.FURNACE || dev.totem.villagers.world.MinerFurnaceWorkstation.mayUseAssignedStation(level, villager, position));
     }
 
     private static boolean atStationOrNavigate(Villager toolsmith, BlockPos station) {
@@ -1017,7 +1029,7 @@ public final class ToolsmithVillageEconomyRuntime {
     }
 
     /** Priority is intentional: food production, mining inputs, then renewable wood. */
-    private enum ReplacementTool {
+    enum ReplacementTool {
         HOE("minecraft:farmer", Items.IRON_HOE, Items.COPPER_HOE, Items.STONE_HOE, 2,
                 "totem:toolsmith_iron_hoe", "totem:toolsmith_copper_hoe", "totem:toolsmith_stone_hoe", 4, 4, 3),
         PICKAXE("totem:miner", Items.IRON_PICKAXE, Items.COPPER_PICKAXE, Items.STONE_PICKAXE, 3,
@@ -1054,7 +1066,7 @@ public final class ToolsmithVillageEconomyRuntime {
             this.stonePrice = stonePrice;
         }
 
-        private boolean hasUsableTool(VillagerWorkInventory inventory) {
+        boolean hasUsableTool(VillagerWorkInventory inventory) {
             return inventory.snapshot().stream().anyMatch(this::matchesFamily);
         }
 
@@ -1073,17 +1085,17 @@ public final class ToolsmithVillageEconomyRuntime {
             };
         }
 
-        private String professionId() { return professionId; }
+        String professionId() { return professionId; }
         private Item ironItem() { return ironItem; }
         private Item copperItem() { return copperItem; }
-        private Item stoneItem() { return stoneItem; }
+        Item stoneItem() { return stoneItem; }
         private int materialCount() { return materialCount; }
         private String ironOrderId() { return ironOrderId; }
         private String copperOrderId() { return copperOrderId; }
-        private String stoneOrderId() { return stoneOrderId; }
+        String stoneOrderId() { return stoneOrderId; }
         private int ironPrice() { return ironPrice; }
         private int copperPrice() { return copperPrice; }
-        private int stonePrice() { return stonePrice; }
+        int stonePrice() { return stonePrice; }
         /** The remaining one emerald of retail value pays the Lumberjack's amortized stick share. */
         private int ironMaterialPrice() { return ironPrice - 1; }
         private int copperMaterialPrice() { return copperPrice - 1; }
