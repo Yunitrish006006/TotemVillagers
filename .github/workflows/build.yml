@@ -92,7 +92,22 @@ jobs:
         run: scripts/test-resource-parcel-restart.sh -PtotemCoreJar="$CORE_JAR" -PtotemRemnantJar="$REMNANT_JAR"
 
       - name: Verify head status on two rendering clients
-        run: python3 scripts/test-head-status-tracking.py -PtotemCoreJar="$CORE_JAR" -PtotemRemnantJar="$REMNANT_JAR"
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "true"
+          SDL_VIDEO_DRIVER: x11
+          TOTEM_TRACKING_GRAPHICS_BACKEND: OPENGL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libgl1-mesa-dri libglx-mesa0 x11-utils xserver-xorg-core xserver-xorg-video-dummy
+          bash .github/scripts/run-glx-client.sh python3 scripts/test-head-status-tracking.py -PtotemCoreJar="$CORE_JAR" -PtotemRemnantJar="$REMNANT_JAR"
+
+      - name: Preserve tracking diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracking-diagnostics-${{ github.run_attempt }}
+          path: build/reports/head-status-tracking/*.log
+          if-no-files-found: ignore
 
       - name: Bind validated release artifact to this Build
         shell: bash

@@ -18,7 +18,7 @@ runtime = repo / "build/head-status-tracking"
 java = str(Path(os.environ["JAVA_HOME"]) / "bin/java") if "JAVA_HOME" in os.environ else "java"
 
 
-def wait_for_message(log, process, pattern, start=0):
+def wait_for_message(log, process, pattern, start=0, peer=None):
     deadline = time.monotonic() + 240
     with log.open(errors="replace") as stream:
         stream.seek(start)
@@ -27,6 +27,8 @@ def wait_for_message(log, process, pattern, start=0):
                 match = re.search(pattern, line)
                 if match:
                     return match
+            if peer is not None and peer.poll() is not None:
+                raise RuntimeError(f"Rendering client exited before {pattern}")
             if process.poll() is not None:
                 raise RuntimeError(f"{log.name} exited before {pattern}. See {log}")
             time.sleep(0.2)
@@ -50,6 +52,8 @@ def run(world, reports):
                "-Dfabric.dli.config=" + str(repo / ".gradle/loom-cache/launch.cfg"),
                "-Dfabric.dli.env=" + environment, "-Dfabric.dli.main=net.fabricmc.loader.impl.launch.knot.Knot" + main,
                "-cp", (runtime / (kind + ".classpath")).read_text(), "net.fabricmc.devlaunchinjector.Main", *arguments]
+        if is_client and os.environ.get("TOTEM_TRACKING_GRAPHICS_BACKEND"):
+            cmd.extend(["--graphicsBackend", os.environ["TOTEM_TRACKING_GRAPHICS_BACKEND"]])
         if is_client and not os.environ.get("DISPLAY"):
             cmd = ["xvfb-run", "-a", "-s", "-screen 0 1024x768x24", *cmd]
         log = reports / (name + ".log")
@@ -82,7 +86,7 @@ def run(world, reports):
             (folder / "options.txt").write_text("lang:zh_tw\nrenderDistance:3\nsimulationDistance:5\n")
             log, peer = launch(name, "client", ["--version", "Fabric", "--accessToken", "FabricMC",
                     "--username", name, "--quickPlayMultiplayer", f"127.0.0.1:{port}", "--width", "854", "--height", "480"])
-            wait_for_message(server_log, server, rf"{name}.*logged in with entity id")
+            wait_for_message(server_log, server, rf"{name}.*logged in with entity id", peer=peer)
             command(f"tp {name} 0.5 100 {z} 0 0")
             resident = wait_for_message(log, peer, rf"Tracking {name} observed ([a-f0-9-]+)")[1]
             viewers.append((name, log, peer, resident))
