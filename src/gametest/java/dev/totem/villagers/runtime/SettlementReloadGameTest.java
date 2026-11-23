@@ -48,7 +48,6 @@ public final class SettlementReloadGameTest {
         jobs.putAssignment(loggerJob);
         var spareHome = spare.getBrain().getMemory(MemoryModuleType.HOME).orElseThrow();
         settings.setMode(WorkBackedTradingMode.ENFORCED);
-        level.setChunkForced(chunkX,chunkZ,false);
         h.runBeforeTestEnd(() -> {
             settings.setMode(previous);
             for (var id : residents) {
@@ -60,11 +59,19 @@ public final class SettlementReloadGameTest {
             jobs.removeZone(forest.id());
             level.setChunkForced(chunkX,chunkZ,false);
         });
+        boolean[] unloading = {false};
         int[] unloaded = {0};
         boolean[] reloaded = {false};
         boolean[] released = {false};
         boolean[] changedWhileAway = {false};
         h.succeedWhen(() -> {
+            if (!unloading[0]) {
+                h.assertTrue(level.areEntitiesActuallyLoadedAndTicking(new net.minecraft.world.level.ChunkPos(chunkX,chunkZ))
+                        && residents.stream().allMatch(id -> level.getEntity(id) instanceof Villager),
+                        "Waiting for the initial three residents to be tracked in their ticking chunk");
+                unloading[0] = true;
+                level.setChunkForced(chunkX,chunkZ,false);
+            }
             if (!reloaded[0]) {
                 h.assertTrue(!level.isLoaded(base) && residents.stream().noneMatch(id -> level.getEntity(id)!=null),"Waiting for real chunk unload");
                 if (!jobs.getAssignment(miner.getUUID()).equals(Optional.of(minerJob))
@@ -73,6 +80,7 @@ public final class SettlementReloadGameTest {
                 if (++unloaded[0] == 200) {
                     reloaded[0]=true;
                     level.setChunkForced(chunkX,chunkZ,true);
+                    level.getChunkAt(base);
                 }
                 throw h.assertionException("Waiting for 200 unloaded ticks and reload");
             }
