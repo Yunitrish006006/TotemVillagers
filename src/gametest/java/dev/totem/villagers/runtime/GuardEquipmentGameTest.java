@@ -39,6 +39,7 @@ public final class GuardEquipmentGameTest {
 
     @SuppressWarnings("unchecked")
     private static void purchase(GameTestHelper h, boolean armor) {
+        h.setTime(3000);
         var level = h.getLevel();
         var server = level.getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
@@ -95,6 +96,7 @@ public final class GuardEquipmentGameTest {
                 setRole(v, "minecraft:toolsmith");
                 v.getBrain().setMemory(MemoryModuleType.JOB_SITE, GlobalPos.of(level.dimension(), ticket));
             }
+            level.setBlockAndUpdate(smith.blockPosition().south(), Blocks.CRAFTING_TABLE.defaultBlockState());
             var home = smith.getBrain().getMemory(MemoryModuleType.HOME);
             level.setBlockAndUpdate(next, armor ? Blocks.BLAST_FURNACE.defaultBlockState() : Blocks.GRINDSTONE.defaultBlockState());
             buyer.insertExact(new ItemStack(Items.EMERALD, price));
@@ -139,6 +141,7 @@ public final class GuardEquipmentGameTest {
     }
 
     private static void buyBoots(GameTestHelper h, Villager guard, EntityType<Villager> type, VillagerWorkInventorySavedData accounts) {
+        h.setTime(3000);
         var level = h.getLevel();
         var apprentice = h.spawnWithNoFreeWill(type, new BlockPos(5, 3, 3));
         var shepherd = h.spawnWithNoFreeWill(type, new BlockPos(5, 3, 2));
@@ -215,6 +218,7 @@ public final class GuardEquipmentGameTest {
     @GameTest(environment = "totem:butcher_trials", structure = "totem:river_households", padding = 60)
     @SuppressWarnings("unchecked")
     public void openPostAppointsItsFirstGuardAndBuildsOneGolem(GameTestHelper h) {
+        h.setTime(3000);
         var level = h.getLevel();
         var server = level.getServer();
         var mode = WorkBackedTradingSettingsSavedData.forServer(server);

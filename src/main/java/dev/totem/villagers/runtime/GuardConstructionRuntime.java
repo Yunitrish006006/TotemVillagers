@@ -125,6 +125,7 @@ public final class GuardConstructionRuntime {
             if (!current.equals(persisted)) {
                 persist(villages, current);
             }
+            if (!LoadedVillagerCache.workTime(post.level(), guard)) continue;
             if (!VillagerWorkNeeds.canWork(guard)) {
                 GuardDefenceOrder currentOrder = current.construction()
                         .flatMap(construction -> GuardDefenceOrderDefinitions.get(construction.orderId())).orElse(null);

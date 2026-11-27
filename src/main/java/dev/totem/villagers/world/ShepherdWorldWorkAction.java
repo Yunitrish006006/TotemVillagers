@@ -24,7 +24,7 @@ public final class ShepherdWorldWorkAction {
                          VillagerWorkInventory buyer, ItemStack price) {
         DyeColor outputColour = outputColour(order).orElse(null);
         if (outputColour == null || (buyer != null && !supports(order))
-                || !sheep.isAlive()
+                || !dev.totem.villagers.runtime.VillagerWorkMemory.canTend(shepherd, sheep) || !sheep.isAlive()
                 || sheep.getColor() != outputColour
                 || !sheep.readyForShearing()
                 || shepherd.distanceToSqr(sheep) > WORK_REACH_SQUARED || !shepherd.hasLineOfSight(sheep)
@@ -60,6 +60,7 @@ public final class ShepherdWorldWorkAction {
         if (money != null && !money.commitWithReturn(wool)) throw new IllegalStateException("Wool delivery capacity changed");
         // setSheared performs the real flock-state transition without creating a second physical wool drop.
         sheep.setSheared(true);
+        dev.totem.villagers.runtime.VillagerWorkMemory.claimAfterShearing(shepherd, sheep);
         shepherd.playWorkSound();
         return true;
     }

@@ -84,6 +84,7 @@ public final class FishermanVillageLongevityGameTest {
 
     @GameTest(maxTicks = 80)
     public void fishermanToolsmithLumberjackAndMinerCompletePhysicalCycle(GameTestHelper helper) {
+        helper.setTime(3000);
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
@@ -164,6 +165,8 @@ public final class FishermanVillageLongevityGameTest {
                     "Fisherman did not receive its finite founding fishing rod");
             require(helper, count(toolsmithInventory, Items.STRING) == VillagerStarterSupplyRuntime.TOOLSMITH_STARTING_STRING,
                     "Toolsmith did not receive the finite founding string supply");
+            // Exercise the rooted yard after the one-time personal sapling has already been used.
+            lumberjackInventory.takeExactMatchingItem(new ItemStack(Items.OAK_SAPLING));
             require(helper, count(lumberjackInventory, Items.OAK_SAPLING) == 0,
                     "Generated rooted Lumberyard test unexpectedly began with a physical sapling");
             WorkOrder codOrder = WorkOrderDefinitions.catalog().require("totem:fisherman_cooked_cod");
@@ -557,6 +560,8 @@ public final class FishermanVillageLongevityGameTest {
 
     @SuppressWarnings("unchecked")
     private static Villager spawn(GameTestHelper helper, BlockPos position, String professionId) {
+        if (professionId.equals("minecraft:toolsmith") || professionId.equals("minecraft:farmer"))
+            helper.setBlock(position.north(), Blocks.CRAFTING_TABLE);
         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.fromNamespaceAndPath("minecraft", "villager"));
         require(helper, type != null, "Missing minecraft:villager entity type");
         Villager villager = helper.spawnWithNoFreeWill((EntityType<Villager>) type, position);

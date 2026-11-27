@@ -6,7 +6,6 @@ import dev.totem.villagers.inventory.VillagerWorkInventory;
 import dev.totem.villagers.inventory.VillagerWorkInventorySavedData;
 import dev.totem.villagers.needs.VillagerWalletSavedData;
 import dev.totem.villagers.needs.VillagerNutrition;
-import dev.totem.villagers.trade.InventoryDrivenProfessionTrades;
 import dev.totem.villagers.trade.VillagerTradeStockAuthority;
 import dev.totem.villagers.work.StockVariantKey;
 import dev.totem.villagers.work.VillagerProfessionEquipment;
@@ -83,11 +82,14 @@ public final class VillagerStarterSupplyRuntime {
                 if ("minecraft:toolsmith".equals(profession)) {
                     kit.add(new ItemStack(Items.STRING, TOOLSMITH_STARTING_STRING));
                     kit.add(new ItemStack(Items.SHEARS, TOOLSMITH_STARTING_SHEARS));
+                } else if ("totem:lumberjack".equals(profession)) {
+                    kit.add(new ItemStack(Items.OAK_SAPLING));
+                    kit.add(new ItemStack(Items.MANGROVE_PROPAGULE));
                 } else if ("totem:miner".equals(profession)) {
                     // Finite ignition stock survives early metal work while the first renewable charcoal batch starts.
                     kit.add(new ItemStack(Items.COAL, MINER_STARTING_COAL));
                 }
-                InventoryDrivenProfessionTrades.starterStock(villager, level).ifPresent(kit::add);
+
                 if (!kit.isEmpty() && !inventory.insertAllExact(kit)) {
                     continue;
                 }

@@ -68,8 +68,7 @@ public final class MinerCharcoalEconomyRuntime {
         int completed = 0;
         VillagerWorkInventorySavedData inventories = VillagerWorkInventorySavedData.forServer(server);
         for (ServerLevel level : server.getAllLevels()) {
-            List<? extends Villager> villagers = level.getEntities(
-                    EntityTypeTest.forClass(Villager.class), Villager::isAlive);
+            List<? extends Villager> villagers = LoadedVillagerCache.workers(level);
             for (Villager miner : villagers.stream()
                     .filter(villager -> isProfession(villager, "totem:miner")).toList()) {
                 if (maintainCharcoal(level, miner, villagers, inventories)) {

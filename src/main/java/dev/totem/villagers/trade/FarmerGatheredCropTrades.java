@@ -27,6 +27,8 @@ public final class FarmerGatheredCropTrades {
             sale(Items.BEETROOT_SEEDS, 32)
     );
 
+    static boolean isCrop(ItemStack stack) { return SALES.stream().anyMatch(sale -> stack.is(sale.item())); }
+
     private FarmerGatheredCropTrades() {
     }
 

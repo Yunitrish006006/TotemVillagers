@@ -30,6 +30,17 @@ public final class GeneratedVillageSavedData extends SavedData {
     private final int dataVersion;
     private final Map<String, GeneratedVillageState> villages = new LinkedHashMap<>();
 
+    private final Map<java.util.UUID, String> resourceDimensions = new java.util.HashMap<>();
+
+    private void indexResources(GeneratedVillageState village) {
+        village.lumberjackZoneId().ifPresent(id -> resourceDimensions.put(id, village.dimensionId()));
+        village.minerZoneId().ifPresent(id -> resourceDimensions.put(id, village.dimensionId()));
+    }
+
+    public synchronized boolean ownsResourceZone(String dimension, java.util.UUID zone) {
+        return dimension.equals(resourceDimensions.get(zone));
+    }
+
     public GeneratedVillageSavedData() {
         this(DATA_VERSION, List.of());
     }
@@ -40,7 +51,7 @@ public final class GeneratedVillageSavedData extends SavedData {
             GeneratedVillageState migrated = dataVersion < 4 && !village.capitalGranted()
                     ? village.withEndowmentLedger()
                     : village;
-            villages.putIfAbsent(migrated.id(), migrated);
+            if (villages.putIfAbsent(migrated.id(), migrated) == null) indexResources(migrated);
         });
     }
 
@@ -54,6 +65,7 @@ public final class GeneratedVillageSavedData extends SavedData {
         Objects.requireNonNull(village, "village");
         GeneratedVillageState existing = villages.putIfAbsent(village.id(), village);
         if (existing == null) {
+            indexResources(village);
             setDirty();
             return village;
         }
@@ -90,7 +102,10 @@ public final class GeneratedVillageSavedData extends SavedData {
 
     /** Test maintenance hook; live generated-village identity is intentionally permanent. */
     public synchronized void remove(String villageId) {
-        if (villages.remove(villageId) != null) {
+        var removed = villages.remove(villageId);
+        if (removed != null) {
+            removed.lumberjackZoneId().ifPresent(resourceDimensions::remove);
+            removed.minerZoneId().ifPresent(resourceDimensions::remove);
             setDirty();
         }
     }
@@ -102,6 +117,11 @@ public final class GeneratedVillageSavedData extends SavedData {
         }
         GeneratedVillageState updated = operation.apply(existing);
         if (!updated.equals(existing)) {
+            if (!existing.lumberjackZoneId().equals(updated.lumberjackZoneId()) || !existing.minerZoneId().equals(updated.minerZoneId())) {
+                existing.lumberjackZoneId().ifPresent(resourceDimensions::remove);
+                existing.minerZoneId().ifPresent(resourceDimensions::remove);
+                indexResources(updated);
+            }
             villages.put(villageId, updated);
             setDirty();
         }

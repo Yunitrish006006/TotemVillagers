@@ -31,6 +31,7 @@ public final class BuilderSettlementGameTest {
 
     @GameTest(structure = "totem:river_households", padding = 48)
     public void buyOnlyMatchingSurplusFromLocalForester(GameTestHelper h) {
+        h.setTime(3000);
         var level = h.getLevel();
         var server = level.getServer();
         var assignments = WorkerAssignmentSavedData.forServer(server);
@@ -108,6 +109,7 @@ public final class BuilderSettlementGameTest {
     }
 
     private static void settlement(GameTestHelper h, boolean mine) {
+        h.setTime(3000);
         var level = h.getLevel();
         var server = level.getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);

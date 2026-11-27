@@ -91,7 +91,7 @@ public final class VillagerLibrarianEnchantingRuntime {
         VillagerWorkSavedData states = VillagerWorkSavedData.forServer(server);
         VillagerWorkInventorySavedData inventories = VillagerWorkInventorySavedData.forServer(server);
         for (ServerLevel level : server.getAllLevels()) {
-            for (Villager villager : LoadedVillagerCache.loaded(level)) {
+            for (Villager villager : LoadedVillagerCache.workers(level)) {
                 if (isLibrarian(villager)) {
                     tickLibrarian(level, villager, states, inventories, forceIdleScan);
                 }

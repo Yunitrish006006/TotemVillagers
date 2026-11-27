@@ -22,9 +22,28 @@ abstract class HarvestFarmlandMixin {
     private void respectFieldCaretaker(ServerLevel level, Villager worker, long time, CallbackInfo callback) {
         if (aboveFarmlandPos != null
                 && WorkBackedTradingSettingsSavedData.forServer(level.getServer()).settings().mode() == WorkBackedTradingMode.ENFORCED
-                && ProductionParcel.get(level.getServer()).heldByAnother(level, aboveFarmlandPos.below(), worker)) {
+                && (ProductionParcel.get(level.getServer()).heldByAnother(level, aboveFarmlandPos.below(), worker)
+                    || hasWorkHoeForCrop(level, worker, aboveFarmlandPos)
+                    || dev.totem.villagers.work.VillagerWorkSavedData.forServer(level.getServer()).get(worker.getUUID())
+                        .flatMap(state -> state.activeWork())
+                        .filter(work -> work.source() == dev.totem.villagers.work.WorkSource.WORLD)
+                        .flatMap(work -> work.worldTarget())
+                        .filter(target -> target.dimensionId().equals(level.dimension().identifier().toString()))
+                        .flatMap(target -> target.packedBlockPosition())
+                        .filter(pos -> pos == aboveFarmlandPos.asLong()).isPresent())) {
             aboveFarmlandPos = null;
             callback.cancel();
         }
+    }
+
+    private static boolean hasWorkHoeForCrop(ServerLevel level, Villager worker, BlockPos crop) {
+        var state = level.getBlockState(crop);
+        if (!(state.getBlock() instanceof net.minecraft.world.level.block.CropBlock plant) || !plant.isMaxAge(state)
+                || !dev.totem.villagers.world.FarmerWorldWorkAction.growsFood(level, crop)) return false;
+        var site = worker.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.JOB_SITE);
+        return site.filter(s -> s.dimension().equals(level.dimension()) && s.pos().distSqr(crop) <= 24 * 24
+                && level.isLoaded(s.pos()) && level.getBlockState(s.pos()).is(net.minecraft.world.level.block.Blocks.COMPOSTER)).isPresent()
+                && dev.totem.villagers.world.FarmerWorldWorkAction.bestHoe(dev.totem.villagers.inventory.VillagerWorkInventorySavedData
+                        .forServer(level.getServer()).inventory(worker.getUUID())).isPresent();
     }
 }

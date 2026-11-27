@@ -41,6 +41,7 @@ public final class LumberjackWoodcutterAction {
         if (live == null || !inventory.exchangeExactMatching(input, live.output())) {
             return false;
         }
+        dev.totem.villagers.trade.GatheredMaterialTrades.recordProducts(lumberjack, java.util.List.of(live.output()));
         lumberjack.playWorkSound();
         level.playSound(null, station, SoundEvents.UI_STONECUTTER_TAKE_RESULT, SoundSource.BLOCKS, 1.0F, 1.0F);
         return true;

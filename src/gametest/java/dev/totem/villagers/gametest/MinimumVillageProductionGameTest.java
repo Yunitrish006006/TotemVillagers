@@ -173,6 +173,7 @@ public final class MinimumVillageProductionGameTest {
 
             require(helper, farmerInventory.insertExact(new ItemStack(Items.IRON_HOE)),
                     "Could not give the Farmer its physical work hoe");
+            farmer.setPos(crop.getX() - .5, crop.getY(), crop.getZ() + .5);
             require(helper, new FarmerWorldWorkAction().complete(level, farmer, crop, farmerOrder, farmerInventory),
                     "Farmer could not harvest and replant the prepared wheat field");
             require(helper, new MinerWorldWorkAction().complete(level, miner, oreFace, MINER_TARGETS, minerOrder, minerInventory),

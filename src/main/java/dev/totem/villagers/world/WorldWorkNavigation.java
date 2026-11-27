@@ -8,7 +8,6 @@ import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.level.pathfinder.PathComputationType;
 
 import java.util.LinkedHashSet;
-import java.util.Comparator;
 import java.util.Optional;
 import java.util.Set;
 
@@ -42,23 +41,56 @@ public final class WorldWorkNavigation {
         return horizontalSteps == 1 && targetElevation >= 0 && targetElevation <= 2;
     }
 
+    public static boolean atWildTarget(ServerLevel level, Villager worker, BlockPos pos) {
+        var tree = NaturalWorkTrees.at(level, pos);
+        return tree == null ? isWithinReach(worker, pos) : visibleTrunk(level, worker, worker.getEyePosition(), tree);
+    }
+
+    private static boolean visibleTrunk(ServerLevel level, Villager worker, net.minecraft.world.phys.Vec3 eye,
+                                        NaturalWorkTrees.Tree tree) {
+        for (var log : tree.logs()) {
+            if (log.getY() > tree.base().getY() + 2) break;
+            var center = net.minecraft.world.phys.Vec3.atCenterOf(log);
+            if (eye.distanceToSqr(center) > 3 * 3) continue;
+            var hit = level.clip(new net.minecraft.world.level.ClipContext(eye, center,
+                    net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                    net.minecraft.world.level.ClipContext.Fluid.NONE, worker));
+            if (hit.getBlockPos().equals(log)) return true;
+        }
+        return false;
+    }
+
+    private static Set<BlockPos> wildTreeStances(ServerLevel level, Villager worker, NaturalWorkTrees.Tree tree) {
+        var stances = new LinkedHashSet<BlockPos>();
+        var base = tree.base();
+        for (var p : BlockPos.betweenClosed(base.offset(-3,-2,-3), base.offset(3,2,3))) {
+            if (!level.isLoaded(p) || !level.getBlockState(p.below()).isFaceSturdy(level,p.below(),Direction.UP)
+                    || !level.getBlockState(p).isPathfindable(PathComputationType.LAND)
+                    || !level.getBlockState(p.above()).isPathfindable(PathComputationType.LAND)) continue;
+            if (visibleTrunk(level, worker, net.minecraft.world.phys.Vec3.atBottomCenterOf(p).add(0,worker.getEyeHeight(),0), tree))
+                stances.add(p.immutable());
+        }
+        return stances;
+    }
+
     /** Public for deterministic GameTests and concise live-work diagnostics. */
     public static Optional<Path> pathToReach(ServerLevel level, Villager worker, BlockPos target) {
+        return pathToReach(level, worker, target, false);
+    }
+
+    public static Optional<Path> pathToReach(ServerLevel level, Villager worker, BlockPos target, boolean wild) {
         restoreSupportedGroundState(level, worker);
-        Set<BlockPos> stances = reachableStanceCandidates(level, target);
+        var tree = wild ? NaturalWorkTrees.at(level, target) : null;
+        Set<BlockPos> stances = tree == null ? reachableStanceCandidates(level, target) : wildTreeStances(level, worker, tree);
         if (stances.isEmpty()) {
             return Optional.empty();
         }
-        // Pathing to the solid work target lets vanilla choose its top face,
-        // recreating the surface-mining bug. Path to the supporting block
-        // beneath each candidate instead, then retain only paths whose entity
-        // endpoint is the requested adjacent air stance.
-        return stances.stream()
-                .map(stance -> worker.getNavigation().createPath(stance.below(), 0))
-                .filter(path -> path != null && path.getEndNode() != null && path.getNodeCount() > 0)
-                .filter(path -> stances.contains(BlockPos.containing(
-                        path.getEntityPosAtNode(worker, path.getNodeCount() - 1))))
-                .min(Comparator.comparingInt(Path::getNodeCount));
+        // The multi-target overload takes air nodes directly and performs one A* search.
+        Path path = wild ? ((dev.totem.villagers.mixin.ResourcePathInvoker)worker.getNavigation())
+                .totemVillagers$pathToStances(stances, 8, false, 0, 72) : worker.getNavigation().createPath(stances, 0);
+        if (path == null || !path.canReach() || path.getNodeCount() == 0 || !stances.contains(BlockPos.containing(
+                path.getEntityPosAtNode(worker, path.getNodeCount() - 1)))) return Optional.empty();
+        return Optional.of(path);
     }
 
     /**
@@ -87,6 +119,7 @@ public final class WorldWorkNavigation {
             for (int targetElevation = 0; targetElevation <= 2; targetElevation++) {
                 BlockPos stance = target.relative(direction).below(targetElevation);
                 if (!level.isLoaded(stance)
+                        || !level.getBlockState(stance.below()).isFaceSturdy(level, stance.below(), Direction.UP)
                         || !level.getBlockState(stance).isPathfindable(PathComputationType.LAND)
                         || !level.getBlockState(stance.above()).isPathfindable(PathComputationType.LAND)) {
                     continue;

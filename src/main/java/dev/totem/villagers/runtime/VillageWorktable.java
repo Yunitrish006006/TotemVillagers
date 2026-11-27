@@ -14,8 +14,64 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Optional;
 
 /** Shared table access and physical wood supply for household and farm work. */
-final class VillageWorktable {
+public final class VillageWorktable {
+    private record Miss(net.minecraft.core.GlobalPos anchor, long retryAt, VillagerHeadStatus.Kind reason) {}
+    private static final java.util.Map<Villager, Miss> MISSES = new java.util.WeakHashMap<>();
+
     private VillageWorktable() {}
+
+    public static boolean atTable(ServerLevel level, Villager worker) {
+        for (var side : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            var pos = worker.blockPosition().relative(side);
+            if (level.isLoaded(pos) && level.getBlockState(pos).is(Blocks.CRAFTING_TABLE)
+                    && WorldWorkPermissions.mayWork(level, worker, pos)) return true;
+        }
+        return false;
+    }
+
+    static boolean waitingForTable(ServerLevel level, Villager worker, BlockPos station) {
+        var miss = MISSES.get(worker);
+        return miss != null && miss.anchor.dimension().equals(level.dimension()) && miss.anchor.pos().equals(station)
+                && level.getGameTime() < miss.retryAt && !atTable(level, worker);
+    }
+
+    static boolean approach(ServerLevel level, Villager worker, BlockPos station) {
+        if (atTable(level, worker)) {
+            MISSES.remove(worker);
+            VillagerHeadStatus.clear(worker, VillagerHeadStatus.Kind.TABLE, VillagerHeadStatus.Kind.UNREACHABLE);
+            return true;
+        }
+        var anchor = net.minecraft.core.GlobalPos.of(level.dimension(), station);
+        var miss = MISSES.get(worker);
+        if (miss != null && miss.anchor.equals(anchor) && level.getGameTime() < miss.retryAt) {
+            VillagerHeadStatus.report(worker, miss.reason);
+            return false;
+        }
+        if (!worker.getNavigation().isDone()) return false;
+        var tables = BlockPos.betweenClosedStream(station.offset(-6, -2, -6), station.offset(6, 2, 6))
+                .filter(level::isLoaded).filter(p -> level.getBlockState(p).is(Blocks.CRAFTING_TABLE))
+                .filter(p -> WorldWorkPermissions.mayWork(level, worker, p))
+                .map(BlockPos::immutable).sorted(java.util.Comparator.comparingDouble(p -> p.distSqr(worker.blockPosition())))
+                .limit(4).toList();
+        for (var table : tables) {
+            if (walkToSide(level, worker, table)) return false;
+        }
+        var reason = tables.isEmpty() ? VillagerHeadStatus.Kind.TABLE : VillagerHeadStatus.Kind.UNREACHABLE;
+        MISSES.put(worker, new Miss(anchor, level.getGameTime() + 100, reason));
+        VillagerHeadStatus.report(worker, reason);
+        return false;
+    }
+
+    static boolean walkToSide(ServerLevel level, Villager worker, BlockPos target) {
+        for (var side : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            var stance = target.relative(side);
+            if (!level.isLoaded(stance) || !level.getBlockState(stance).isPathfindable(
+                    net.minecraft.world.level.pathfinder.PathComputationType.LAND)) continue;
+            var path = worker.getNavigation().createPath(stance, 0);
+            if (path != null && path.canReach() && worker.getNavigation().moveTo(path, .5)) return true;
+        }
+        return false;
+    }
 
     static Optional<BlockPos> near(ServerLevel level, Villager worker, BlockPos anchor) {
         var table = BlockPos.betweenClosedStream(anchor.offset(-3, -1, -3), anchor.offset(3, 1, 3))

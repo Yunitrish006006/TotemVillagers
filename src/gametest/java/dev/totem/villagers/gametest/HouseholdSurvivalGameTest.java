@@ -215,8 +215,8 @@ public final class HouseholdSurvivalGameTest {
         BlockPos stand = worker.blockPosition();
         BlockPos water = stand.east();
         BlockPos tree = stand.north();
-        BlockPos table = home.north();
-        var grass = List.of(stand.north(2), stand.south(), stand.north().east(), stand.south().east(),
+        BlockPos table = stand.south();
+        var grass = List.of(stand.north(2), stand.west(2).south(), stand.north().east(), stand.south().east(),
                 stand.south(2), stand.south().west());
         try {
             var head = BuiltInRegistries.BLOCK.getValue(Identifier.parse("minecraft:red_bed")).defaultBlockState().setValue(BedBlock.PART, BedPart.HEAD);
@@ -319,6 +319,7 @@ public final class HouseholdSurvivalGameTest {
                     VillagerNutrition.setFoodLevel(worker, 20);
                 }
                 if (settle) {
+                    station = field.east();
                     level.setBlockAndUpdate(station, Blocks.COMPOSTER.defaultBlockState());
                     var role = BuiltInRegistries.VILLAGER_PROFESSION.wrapAsHolder(
                             BuiltInRegistries.VILLAGER_PROFESSION.getValue(Identifier.parse("minecraft:farmer")));
@@ -330,13 +331,18 @@ public final class HouseholdSurvivalGameTest {
                             .acquire(level, neighbor, otherSite, field.below(), true), "Farmer stole a starter plot");
                 }
                 var wheat = (net.minecraft.world.level.block.CropBlock) Blocks.WHEAT;
+                worker.setPos(field.getX() + .5, field.getY(), field.getZ() + .5);
                 for (int cycle = 0; cycle < 5 && inventory.countMatchingItem(new ItemStack(Items.BREAD)) == 0; cycle++) {
                     level.setBlockAndUpdate(field, wheat.getStateForAge(wheat.getMaxAge()));
                     var harvest = new dev.totem.villagers.world.FarmerWorldWorkAction();
                     require(helper, !harvest.complete(level, neighbor, field,
                             dev.totem.villagers.work.WorkOrderDefinitions.catalog().require("totem:farmer_wheat"), inventory),
                             "A second unemployed resident harvested someone else's field");
-                    for (int step = 0; step < 5; step++) HouseholdSurvivalRuntime.work(level, worker);
+                    for (int step = 0; step < 5; step++) {
+                        if (!settle && inventory.countMatchingItem(new ItemStack(Items.WHEAT)) >= 3)
+                            worker.snapTo(net.minecraft.world.phys.Vec3.atBottomCenterOf(stand));
+                        HouseholdSurvivalRuntime.work(level, worker);
+                    }
                     if (settle) {
                         require(helper, inventory.countMatchingItem(new ItemStack(Items.WHEAT)) > 0, "No harvest before promotion");
                         checkCareer(helper, worker, home, station, "farmer", field.below());

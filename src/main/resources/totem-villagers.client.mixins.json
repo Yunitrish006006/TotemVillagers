@@ -3,6 +3,7 @@
   "package": "dev.totem.villagers.mixin.client",
   "compatibilityLevel": "JAVA_25",
   "client": [
+    "BellScheduleLabelMixin",
     "AbstractContainerScreenTradeSnapshotMixin",
     "LivingEntityRendererItemModelResolverAccessor",
     "MerchantScreenTradeSnapshotMixin",

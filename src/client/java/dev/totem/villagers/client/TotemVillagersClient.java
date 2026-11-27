@@ -10,6 +10,7 @@ public final class TotemVillagersClient implements ClientModInitializer {
     public void onInitializeClient() {
         ModelLayerRegistry.registerModelLayer(VillagerPlayerLikeItemLayer.MODEL_LAYER,
                 VillagerPlayerLikeItemLayer::createLayerDefinition);
+        TradeSnapshotClient.register();
         WoodcutterScreenRegistration.register();
     }
 }

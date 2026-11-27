@@ -47,7 +47,7 @@ public final class FishermanFuelEconomyRuntime {
         }
         VillagerWorkInventorySavedData inventories = VillagerWorkInventorySavedData.forServer(server);
         for (ServerLevel level : server.getAllLevels()) {
-            List<? extends Villager> villagers = LoadedVillagerCache.loaded(level);
+            List<? extends Villager> villagers = LoadedVillagerCache.workers(level);
             villagers.stream().filter(villager -> isProfession(villager, "minecraft:fisherman"))
                     .forEach(fisherman -> buyOneFuel(fisherman, villagers, inventories));
         }

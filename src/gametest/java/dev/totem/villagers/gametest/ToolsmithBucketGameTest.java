@@ -32,6 +32,7 @@ import net.minecraft.world.level.block.Blocks;
 public final class ToolsmithBucketGameTest {
     @GameTest(maxTicks = 100)
     public void toolsmithTurnsThreeIronIngotsIntoOneSellableEmptyBucket(GameTestHelper helper) {
+        helper.setTime(3000);
         var server = helper.getLevel().getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
         BlockPos relativeJobSite = new BlockPos(3, 2, 3);
@@ -77,6 +78,7 @@ public final class ToolsmithBucketGameTest {
 
     @SuppressWarnings("unchecked")
     private static Villager spawnToolsmith(GameTestHelper helper, BlockPos relativePosition) {
+        helper.setBlock(relativePosition.west(), Blocks.CRAFTING_TABLE);
         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.fromNamespaceAndPath("minecraft", "villager"));
         require(helper, type != null, "Missing minecraft:villager entity type");
         Villager villager = helper.spawnWithNoFreeWill((EntityType<Villager>) type, relativePosition);

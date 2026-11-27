@@ -34,6 +34,7 @@ public final class HouseholdForestryGameTest {
     @GameTest(environment = "totem:smith_trials", structure = "totem:river_households")
     @SuppressWarnings("unchecked")
     public void forestTrialRequiresAPaidNeedAndReplantsOnlyRecordedTrees(GameTestHelper h) {
+        h.setTime(3000);
         var level = h.getLevel();
         var server = level.getServer();
         var mode = WorkBackedTradingSettingsSavedData.forServer(server);
@@ -63,7 +64,7 @@ public final class HouseholdForestryGameTest {
             level.setBlockAndUpdate(workerSoil, Blocks.DIRT.defaultBlockState());
             level.setBlockAndUpdate(workerSoil.above(), Blocks.AIR.defaultBlockState());
             level.setBlock(workerSoil.east(), Blocks.WATER.defaultBlockState(), 2);
-            level.setBlockAndUpdate(worker.blockPosition().south(2).west(), Blocks.CRAFTING_TABLE.defaultBlockState());
+            level.setBlockAndUpdate(worker.blockPosition().west(), Blocks.CRAFTING_TABLE.defaultBlockState());
             var starterTree = worker.blockPosition().north();
             recordedOak(level, starterTree);
             stock.insertExact(new ItemStack(Items.WHEAT_SEEDS));

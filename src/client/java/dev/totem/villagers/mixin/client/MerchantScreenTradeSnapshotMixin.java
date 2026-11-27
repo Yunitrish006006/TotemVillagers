@@ -1,5 +1,6 @@
 package dev.totem.villagers.mixin.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.totem.villagers.client.TradeSnapshotClient;
 import dev.totem.villagers.network.TradeSnapshotPayload;
 import net.minecraft.client.gui.Font;
@@ -23,49 +24,95 @@ import java.util.stream.Collectors;
 
 /** Renders a compact, localised read-only work summary inside the vanilla trade screen. */
 @Mixin(MerchantScreen.class)
-abstract class MerchantScreenTradeSnapshotMixin extends AbstractContainerScreen<MerchantMenu> {
-    private static final int PANEL_WIDTH = 164;
-    private static final int PANEL_HEIGHT = 45;
+abstract class MerchantScreenTradeSnapshotMixin extends AbstractContainerScreen<MerchantMenu> implements dev.totem.villagers.client.TradeViewSelection {
+    private static final int PANEL_WIDTH = 89;
     private static final int INVENTORY_PANEL_WIDTH = 170;
-    private static final int INVENTORY_PANEL_BASE_HEIGHT = 91;
+    private boolean detailsOpen;
     private static final int SLOT_SIZE = 18;
 
     @Shadow
     private int shopItem;
 
+    @Shadow private int scrollOff;
+    public int selectedTrade() { return shopItem; }
+    public int scrollOffset() { return scrollOff; }
+    public boolean detailsOpen() { return detailsOpen; }
+    public void setTradeView(int selected, int scroll, boolean details) { shopItem = selected; scrollOff = scroll; detailsOpen = details; }
+
     private MerchantScreenTradeSnapshotMixin() {
         super(null, null, null);
     }
 
+    @Inject(method = "extractContents", at = @At("HEAD"), cancellable = true)
+    private void renderDetailsPage(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick, CallbackInfo callback) {
+        var snapshot = TradeSnapshotClient.snapshot(getMenu().containerId);
+        if (!detailsOpen || snapshot.isEmpty()) return;
+        callback.cancel();
+        graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xFF383838);
+        graphics.fill(leftPos + 2, topPos + 2, leftPos + imageWidth - 2, topPos + imageHeight - 2, 0xFF242424);
+        drawTab(graphics);
+        drawPersonalInventory(graphics, snapshot.get(), mouseX, mouseY);
+        TradeSnapshotClient.selectedOffer(getMenu().containerId, shopItem).ifPresent(offer -> drawWorkSummary(graphics, offer));
+    }
+
     @Inject(method = "extractContents", at = @At("TAIL"))
-    private void totemVillagers$drawWorkSummary(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float tickDelta,
-                                                CallbackInfo callback) {
-        TradeSnapshotClient.snapshot(getMenu().containerId).ifPresent(snapshot -> {
-            TradeSnapshotClient.selectedOffer(getMenu().containerId, shopItem)
-                    .ifPresent(offer -> drawWorkSummary(graphics, offer));
-            drawPersonalInventory(graphics, snapshot, mouseX, mouseY);
-        });
+    private void renderInfoTab(GuiGraphicsExtractor graphics, int x, int y, float partialTick, CallbackInfo callback) {
+        if (!detailsOpen && TradeSnapshotClient.snapshot(getMenu().containerId).isPresent()) drawTab(graphics);
+    }
+
+    private void drawTab(GuiGraphicsExtractor graphics) {
+        graphics.fill(leftPos + 5, topPos + 3, leftPos + 94, topPos + 17, 0xFF545454);
+        var label = Component.translatable(detailsOpen ? "gui.totem_villagers.back_to_trades" : "gui.totem_villagers.villager_info");
+        graphics.text(font, label, leftPos + 49 - font.width(label) / 2, topPos + 5, 0xFFFFFFFF);
+    }
+
+    @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
+    private void switchPage(net.minecraft.client.input.MouseButtonEvent event, boolean doubled,
+                            org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> callback) {
+        if (TradeSnapshotClient.snapshot(getMenu().containerId).isEmpty()) return;
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && event.x() >= leftPos + 5 && event.x() < leftPos + 94
+                && event.y() >= topPos + 3 && event.y() < topPos + 17) {
+            detailsOpen = !detailsOpen;
+            callback.setReturnValue(true);
+        } else if (detailsOpen) callback.setReturnValue(true);
+    }
+
+    @Inject(method = {"mouseReleased", "mouseDragged", "mouseScrolled"}, at = @At("HEAD"), cancellable = true)
+    private void ignoreDetailsInput(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> callback) {
+        if (detailsOpen) callback.setReturnValue(true);
+    }
+
+    @Override public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
+        if (!detailsOpen) return super.keyPressed(event);
+        if (event.key() == 256) detailsOpen = false;
+        return true;
+    }
+
+    private int paragraph(GuiGraphicsExtractor graphics, Component text, int x, int y, int colour) {
+        for (var line : font.split(text, PANEL_WIDTH)) {
+            graphics.text(font, line, x, y, colour);
+            y += font.lineHeight + 2;
+        }
+        return y + 1;
     }
 
     private void drawWorkSummary(GuiGraphicsExtractor graphics, TradeSnapshotPayload.Offer offer) {
-        int panelX = leftPos + 102;
-        int panelY = topPos + 98;
-        graphics.fill(panelX - 3, panelY - 3, panelX + PANEL_WIDTH, panelY + PANEL_HEIGHT, 0xB0182028);
-
+        int panelX = leftPos + 179;
+        int panelY = topPos + 22;
         Component stock = Component.translatable("gui.totem_villagers.trade.stock",
                 offer.availableStock(), offer.requiredStock());
-        graphics.text(font, trim(stock, PANEL_WIDTH - 3), panelX, panelY, stockColour(offer));
+        panelY = paragraph(graphics, stock, panelX, panelY, stockColour(offer));
 
         Component activity = offer.totalWorkTicks() > 0
                 ? Component.translatable("gui.totem_villagers.trade.work", source(offer.source()),
                         offer.progressTicks(), offer.totalWorkTicks())
                 : Component.translatable("gui.totem_villagers.trade.work.unmapped");
-        graphics.text(font, trim(activity, PANEL_WIDTH - 3), panelX, panelY + 10, 0xFFE0E0E0);
+        panelY = paragraph(graphics, activity, panelX, panelY, 0xFFE0E0E0);
 
         Component status = offer.blockedReason().isBlank()
                 ? Component.translatable("gui.totem_villagers.trade.ready")
                 : Component.translatable("gui.totem_villagers.trade.blocked", blockedReason(offer.blockedReason()));
-        graphics.text(font, trim(status, PANEL_WIDTH - 3), panelX, panelY + 20,
+        panelY = paragraph(graphics, status, panelX, panelY,
                 offer.blockedReason().isBlank() ? 0xFF8CFF8C : 0xFFFFA0A0);
 
         if (!offer.recipeInputs().isEmpty()) {
@@ -73,7 +120,7 @@ abstract class MerchantScreenTradeSnapshotMixin extends AbstractContainerScreen<
                     offer.recipeInputs().stream()
                             .map(input -> shortItemName(input.itemId()) + " ×" + input.count())
                             .collect(Collectors.joining(", ")));
-            graphics.text(font, trim(ingredients, PANEL_WIDTH - 3), panelX, panelY + 30, 0xFFE0E0E0);
+            graphics.text(font, trim(ingredients, PANEL_WIDTH), panelX, panelY, 0xFFE0E0E0);
         }
     }
 
@@ -96,10 +143,8 @@ abstract class MerchantScreenTradeSnapshotMixin extends AbstractContainerScreen<
     }
 
     private void drawPersonalInventory(GuiGraphicsExtractor graphics, TradeSnapshotPayload snapshot, int mouseX, int mouseY) {
-        int panelX = inventoryPanelX();
-        int panelY = topPos + 8;
-        graphics.fill(panelX - 3, panelY - 3, panelX + INVENTORY_PANEL_WIDTH,
-                panelY + inventoryPanelHeight(snapshot), 0xC0182028);
+        int panelX = leftPos + 8;
+        int panelY = topPos + 21;
         graphics.text(font, Component.translatable("gui.totem_villagers.work_inventory.title"), panelX, panelY, 0xFFE0E0E0);
 
         Map<Integer, TradeSnapshotPayload.WorkInventorySlot> slots = snapshot.workInventory().stream()
@@ -128,10 +173,17 @@ abstract class MerchantScreenTradeSnapshotMixin extends AbstractContainerScreen<
                                 .map(material -> shortItemName(material.itemId()) + " ×" + material.count())
                                 .collect(Collectors.joining(", ")));
         graphics.text(font, trim(reserved, INVENTORY_PANEL_WIDTH - 3), panelX, panelY + 68, 0xFFFFD080);
-        int nextLine = panelY + 79;
+        Component home = snapshot.home().map(bed -> Component.translatable("gui.totem_villagers.home",
+                bed.pos().getX(), bed.pos().getY(), bed.pos().getZ())).orElseGet(() ->
+                Component.translatable("gui.totem_villagers.home.none"));
+        graphics.text(font, trim(home, INVENTORY_PANEL_WIDTH - 3), panelX, panelY + 79, 0xFFE0E0E0);
+        if (mouseX >= panelX && mouseX < panelX + INVENTORY_PANEL_WIDTH && mouseY >= panelY + 79 && mouseY < panelY + 89)
+            snapshot.home().ifPresent(bed -> graphics.setTooltipForNextFrame(font,
+                    home.copy().append(" (" + bed.dimension().identifier() + ")"), mouseX, mouseY));
+        int nextLine = panelY + 90;
         if (snapshot.workZone().isPresent()) {
             drawWorkZoneStatus(graphics, snapshot.workZone().orElseThrow(), panelX, nextLine);
-            nextLine += 22;
+            nextLine += 20;
         }
         if (snapshot.guardPost().isPresent()) {
             drawGuardPostStatus(graphics, snapshot.guardPost().orElseThrow(), panelX, nextLine);
@@ -178,31 +230,6 @@ abstract class MerchantScreenTradeSnapshotMixin extends AbstractContainerScreen<
                     progress.placedSteps(), progress.totalSteps());
             graphics.text(font, trim(construction, INVENTORY_PANEL_WIDTH - 3), panelX, panelY + 30, 0xFFFFD080);
         });
-    }
-
-    private static int inventoryPanelHeight(TradeSnapshotPayload snapshot) {
-        int height = INVENTORY_PANEL_BASE_HEIGHT;
-        if (snapshot.workZone().isPresent()) {
-            height += 22;
-        }
-        if (snapshot.guardPost().isPresent()) {
-            height += snapshot.guardPost().orElseThrow().construction().isPresent() ? 42 : 32;
-        }
-        return height;
-    }
-
-    /**
-     * Uses the empty space to the right of the vanilla screen when available.
-     * At the default GUI scale that space can be narrower than 170 pixels, so
-     * retain the entire 27-slot panel inside the merchant screen instead of
-     * drawing an unusable clipped panel off-screen.
-     */
-    private int inventoryPanelX() {
-        int outsideScreen = leftPos + 280;
-        if (outsideScreen + INVENTORY_PANEL_WIDTH <= width - 4) {
-            return outsideScreen;
-        }
-        return Math.max(4, Math.min(width - INVENTORY_PANEL_WIDTH - 4, leftPos + 102));
     }
 
     private static String shortItemName(String itemId) {

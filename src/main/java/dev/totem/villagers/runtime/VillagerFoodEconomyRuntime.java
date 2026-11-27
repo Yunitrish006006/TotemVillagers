@@ -102,23 +102,24 @@ public final class VillagerFoodEconomyRuntime {
                 VillagerHeadStatus.Kind.FOOD, VillagerHeadStatus.Kind.BUYING_FOOD);
         if (!needsFoodRestock(villager, ownInventory)) {
             ButcherRationOrders.clear(villager);
-        } else if (inDanger(villager) || villager.isSleeping() || villager.isTrading() || level.isRaided(villager.blockPosition())) {
+        } else if (!LoadedVillagerCache.workTime(level, villager) || inDanger(villager) || villager.isSleeping() || villager.isTrading() || level.isRaided(villager.blockPosition())) {
             ButcherRationOrders.pause(villager);
         } else seekAndBuyFood(level, villager, inventories, now);
     }
 
     static void seekAndBuyFood(ServerLevel level, Villager buyer, VillagerWorkInventorySavedData inventories, long now) {
         VillagerWorkInventory buyerInventory = inventories.inventory(buyer.getUUID());
+        var preferred = VillageMeeting.supplier(buyer, VillageMeeting.RATION);
         var sellers = LoadedVillagerCache.loaded(level).stream()
                 .filter(v -> v != buyer && v.isAlive() && !v.isBaby() && isFoodProducer(v)
                         && v.distanceToSqr(buyer) <= (double)SEARCH_RADIUS * SEARCH_RADIUS)
-                .sorted(java.util.Comparator.comparingDouble(buyer::distanceToSqr)).toList();
+                .sorted(java.util.Comparator.<Villager, Boolean>comparing(v -> !v.getUUID().equals(preferred)).thenComparingDouble(buyer::distanceToSqr)).toList();
         boolean funded = buyerInventory.countMatchingItem(new ItemStack(Items.EMERALD)) >= INTERNAL_FOOD_PRICE;
         if (funded || VillagerNutrition.isHungry(buyer)) {
             for (var producer : sellers) {
                 var stock = inventories.inventory(producer.getUUID());
                 var pack = foodForSale(stock).orElse(null);
-                if (pack == null) continue;
+                if (pack == null || !VillageMeeting.availableTo(producer, buyer, pack, stock)) continue;
                 var offer = new FoodSeller(producer, stock, pack);
                 if (inReach(buyer, producer)) {
                     if (!tryPurchaseFromFoodProducer(level, buyer, offer, inventories)) continue;
@@ -249,6 +250,7 @@ public final class VillagerFoodEconomyRuntime {
             return false;
         }
         if (!inReach(sponsor, producer)) {
+            if (!LoadedVillagerCache.workTime(level, sponsor)) return false;
             sponsor.getNavigation().moveTo(producer, .5D);
             return false;
         }
@@ -271,7 +273,9 @@ public final class VillagerFoodEconomyRuntime {
 
     private static boolean payForFood(Villager buyer, FoodSeller seller, VillagerWorkInventory buyerInventory,
                                       VillagerWorkInventory payer) {
-        if (!transferFood(seller, buyerInventory, payer)) return false;
+        if (!VillageMeeting.availableTo(seller.producer(), buyer, seller.food(), seller.inventory())
+                || !transferFood(seller, buyerInventory, payer)) return false;
+        VillageMeeting.fulfilled(buyer, seller.producer(), VillageMeeting.RATION, 1);
         tryConsumeOwnStoredFood(buyer, buyerInventory);
         return true;
     }

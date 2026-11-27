@@ -46,7 +46,7 @@ public final class FletcherTippedArrowWorkshopAction implements ValidatedWorksho
     @Override
     public boolean complete() {
         if (!villager.isAlive() || !isFletcher(villager)
-                || villager.distanceToSqr(Vec3.atCenterOf(jobSite)) > WORK_REACH_SQUARED
+                || !dev.totem.villagers.runtime.VillageWorktable.atTable(level, villager)
                 || !supports(order, level, jobSite, offers)) {
             return false;
         }

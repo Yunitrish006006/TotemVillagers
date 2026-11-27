@@ -219,11 +219,41 @@ public final class RecipeBackedWorkshopAction implements ValidatedWorkshopAction
                 && (cartographyMapInput(order.requiredInputs()) != null || cartographerCraftingInput(order) != null);
     }
 
+    public static boolean needsCraftingTable(ServerLevel level, WorkOrder order) {
+        if (dev.totem.villagers.work.FletcherTippedArrowOrders.isOfferBoundTippedArrowOrder(order)
+                || dev.totem.villagers.work.LeatherworkerDyedArmorOrders.isOfferBoundDyedOrder(order)) return true;
+        CraftingInput input = switch (order.professionId()) {
+            case "minecraft:farmer" -> farmerInput(order);
+            case "minecraft:fletcher" -> fletcherInput(order);
+            case "minecraft:butcher" -> butcherCraftingInput(order);
+            case "minecraft:fisherman" -> fishermanCraftingInput(order);
+            case "minecraft:shepherd" -> shepherdInput(order);
+            case "minecraft:mason" -> masonCraftingInput(order);
+            case "minecraft:librarian" -> librarianCraftingInput(order);
+            case "minecraft:cleric" -> clericCraftingInput(order);
+            case "minecraft:armorer", "minecraft:weaponsmith", "minecraft:toolsmith" -> smithCraftingInput(order);
+            case "minecraft:leatherworker" -> leatherworkerInput(order);
+            case "minecraft:cartographer" -> {
+                var grid = cartographerCraftingInput(order);
+                yield grid != null ? grid : cartographyMapInput(order.requiredInputs());
+            }
+            default -> null;
+        };
+        if (input == null) return false;
+        var recipe = level.recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, level).orElse(null);
+        if (recipe == null) return false;
+        if (recipe.value() instanceof net.minecraft.world.item.crafting.ShapedRecipe shaped)
+            return shaped.getWidth() > 2 || shaped.getHeight() > 2;
+        return input.ingredientCount() > 4;
+    }
+
     @Override
     public boolean complete() {
         returnedItem = ItemStack.EMPTY;
         if (!villager.isAlive()
-                || villager.distanceToSqr(Vec3.atCenterOf(jobSite)) > WORK_REACH_SQUARED
+                || !(needsCraftingTable(level, order)
+                    ? dev.totem.villagers.runtime.VillageWorktable.atTable(level, villager)
+                    : villager.distanceToSqr(Vec3.atCenterOf(jobSite)) <= WORK_REACH_SQUARED)
                 || !supports(order, level, jobSite)) {
             return false;
         }

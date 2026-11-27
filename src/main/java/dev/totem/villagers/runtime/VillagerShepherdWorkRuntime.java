@@ -71,7 +71,7 @@ public final class VillagerShepherdWorkRuntime {
         }
         VillagerWorkSavedData states = VillagerWorkSavedData.forServer(server);
         for (ServerLevel level : server.getAllLevels()) {
-            for (Villager villager : LoadedVillagerCache.loaded(level)) {
+            for (Villager villager : LoadedVillagerCache.workers(level)) {
                 if ("minecraft:shepherd".equals(professionId(villager))) {
                     tickShepherd(level, villager, catalog, states, forceIdleScan);
                 }
@@ -118,6 +118,23 @@ public final class VillagerShepherdWorkRuntime {
         } else VillagerHeadStatus.clear(shepherd, VillagerHeadStatus.Kind.SHEARS);
         Optional<Sheep> activeSheep = state.activeWork().flatMap(active -> active.worldTarget())
                 .flatMap(WorldWorkTarget::entityId).map(level::getEntity).filter(Sheep.class::isInstance).map(Sheep.class::cast);
+        if (candidates.isEmpty() && state.activeWork().isEmpty() && VillagerRuntimeBudget.dueForIdleScan(level, shepherd)
+                && context.isPresent()) {
+            for (var seen : VillagerWorkMemory.sites(shepherd)) {
+                if (seen.animal().isEmpty() || !seen.site().dimension().equals(level.dimension())) continue;
+                var pos = seen.site().pos();
+                if (!level.isLoaded(pos) || pos.distSqr(context.get().jobSite().pos()) > FLOCK_RADIUS_SQUARED) continue;
+                if (level.getEntity(seen.animal().get()) instanceof Sheep animal && shepherd.distanceToSqr(animal) <= FLOCK_RADIUS_SQUARED && shepherd.hasLineOfSight(animal)) {
+                    VillagerWorkMemory.observe(shepherd, animal);
+                    continue;
+                }
+                if (shepherd.blockPosition().distSqr(pos) > 9 && shepherd.getNavigation().isDone()) {
+                    VillagerHeadStatus.report(shepherd, VillagerHeadStatus.Kind.SEEKING_SHEEP);
+                    shepherd.getNavigation().moveTo(pos.getX() + .5, pos.getY(), pos.getZ() + .5, .5);
+                    break;
+                }
+            }
+        }
         boolean atTarget = activeSheep.map(sheep -> withinReach(shepherd, sheep)).orElse(false);
         WorkScheduleInput input = new WorkScheduleInput(shepherd.getUUID(), "minecraft:shepherd", level.getGameTime(),
                 shepherd.isAlive(), level.isLoaded(shepherd.blockPosition()), inDanger(shepherd), shepherd.isSleeping(),
@@ -136,7 +153,7 @@ public final class VillagerShepherdWorkRuntime {
             Sheep sheep = next.activeWork().flatMap(active -> active.worldTarget()).flatMap(WorldWorkTarget::entityId)
                     .map(level::getEntity).filter(Sheep.class::isInstance).map(Sheep.class::cast).orElse(null);
             if (sheep != null) {
-                shepherd.getNavigation().moveTo(sheep, .5D);
+                if (VillagerWorkMemory.observe(shepherd, sheep)) shepherd.getNavigation().moveTo(sheep, .5D);
             }
         }
         if (!next.equals(state)) {
@@ -170,10 +187,10 @@ public final class VillagerShepherdWorkRuntime {
         if (sheep.isEmpty() && current.isEmpty()) {
             AABB flock = new AABB(context.jobSite().pos()).inflate(32.0D);
             sheep = level.getEntitiesOfClass(Sheep.class, flock,
-                            target -> validTarget(level, shepherd, context, target, order, true))
+                            target -> shepherd.hasLineOfSight(target) && validTarget(level, shepherd, context, target, order, true))
                     .stream().limit(64).min(Comparator.comparingDouble(shepherd::distanceToSqr));
         }
-        return sheep.map(target -> new WorkCandidate(order.id(), WorkSource.WORLD, 10,
+        return sheep.filter(shepherd::hasLineOfSight).map(target -> new WorkCandidate(order.id(), WorkSource.WORLD, 10,
                 Optional.of(WorldWorkTarget.entity(level.dimension().identifier().toString(), target.getUUID()))));
     }
 
@@ -222,7 +239,7 @@ public final class VillagerShepherdWorkRuntime {
     private static boolean validTarget(ServerLevel level, Villager shepherd, ShepherdContext context, Sheep sheep,
                                        WorkOrder order, boolean requirePath) {
         var outputColour = ShepherdWorldWorkAction.outputColour(order).orElse(null);
-        return outputColour != null && sheep.isAlive() && sheep.getColor() == outputColour && sheep.readyForShearing()
+        return VillagerWorkMemory.canTend(shepherd, sheep) && outputColour != null && sheep.isAlive() && sheep.getColor() == outputColour && sheep.readyForShearing()
                 && level.isLoaded(sheep.blockPosition()) && sheep.distanceToSqr(Vec3.atCenterOf(context.jobSite().pos())) <= FLOCK_RADIUS_SQUARED
                 && dev.totem.villagers.worker.ProductionParcel.get(level.getServer()).canWorkPasture(level, shepherd, context.jobSite().pos(), sheep.blockPosition())
                 && (!requirePath || canApproach(shepherd, sheep))
@@ -230,6 +247,7 @@ public final class VillagerShepherdWorkRuntime {
     }
 
     static boolean prepareShearing(ServerLevel level, Villager worker, Sheep sheep, VillagerWorkInventory inventory) {
+        if (!VillagerWorkMemory.canTend(worker, sheep) || !worker.hasLineOfSight(sheep)) return false;
         if (ShearUse.best(inventory.snapshot()).isEmpty()) {
             buySpareShears(level, worker, inventory);
             // The next trial pass rechecks household food after a purchase.
@@ -267,7 +285,7 @@ public final class VillagerShepherdWorkRuntime {
     static Optional<Sheep> trialSheep(ServerLevel level, Villager worker, net.minecraft.core.BlockPos loom, WorkOrder order) {
         var pasture = new AABB(loom).inflate(32);
         var context = new ShepherdContext(GlobalPos.of(level.dimension(), loom));
-        return level.getEntitiesOfClass(Sheep.class, pasture, s -> validTarget(level, worker, context, s, order, false))
+        return level.getEntitiesOfClass(Sheep.class, pasture, s -> worker.hasLineOfSight(s) && validTarget(level, worker, context, s, order, false))
                 .stream().sorted(Comparator.comparingDouble(worker::distanceToSqr))
                 .filter(s -> canApproach(worker, s)).findFirst();
     }

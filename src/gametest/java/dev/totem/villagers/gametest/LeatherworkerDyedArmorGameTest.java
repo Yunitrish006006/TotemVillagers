@@ -81,6 +81,7 @@ public final class LeatherworkerDyedArmorGameTest {
 
     @SuppressWarnings("unchecked")
     private static Villager spawnVillager(GameTestHelper helper, BlockPos relativePosition) {
+        helper.setBlock(relativePosition.west(), Blocks.CRAFTING_TABLE);
         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.fromNamespaceAndPath("minecraft", "villager"));
         require(helper, type != null, "Missing minecraft:villager entity type");
         return helper.spawnWithNoFreeWill((EntityType<Villager>) type, relativePosition);

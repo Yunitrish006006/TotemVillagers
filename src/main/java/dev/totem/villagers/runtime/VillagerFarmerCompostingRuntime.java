@@ -50,7 +50,7 @@ public final class VillagerFarmerCompostingRuntime {
         }
         VillagerWorkInventorySavedData inventories = VillagerWorkInventorySavedData.forServer(server);
         for (ServerLevel level : server.getAllLevels()) {
-            LoadedVillagerCache.loaded(level).stream()
+            LoadedVillagerCache.workers(level).stream()
                     .filter(VillagerFarmerCompostingRuntime::isFarmer)
                     .forEach(farmer -> compostOne(level, farmer, inventories.inventory(farmer.getUUID())));
         }
@@ -68,7 +68,9 @@ public final class VillagerFarmerCompostingRuntime {
             return;
         }
         if (farmer.distanceToSqr(Vec3.atCenterOf(composter)) > WORK_REACH_SQUARED) {
-            farmer.getNavigation().moveTo(composter.getX() + .5D, composter.getY(), composter.getZ() + .5D, .5D);
+            if (farmer.getNavigation().isDone() && (!surplusCompostable(inventory).isEmpty()
+                    || level.getBlockState(composter).getValue(ComposterBlock.LEVEL) >= ComposterBlock.MAX_LEVEL))
+                dev.totem.villagers.world.WorldWorkNavigation.moveToReach(level, farmer, composter, .5D);
             return;
         }
         BlockState state = level.getBlockState(composter);

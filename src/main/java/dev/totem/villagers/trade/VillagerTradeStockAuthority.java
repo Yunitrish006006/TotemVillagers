@@ -69,6 +69,7 @@ public final class VillagerTradeStockAuthority {
         });
         WorkBackedTradingMode mode = WorkBackedTradingSettingsSavedData.forServer(level.getServer()).settings().mode();
         if (!mode.enforcesWorkBackedTrading()) {
+            ProductionMaterialTrades.removeRows(offers);
             // These custom professions deliberately have no vanilla trade set.
             // Keep one locked specialist row so normal interaction still opens
             // a merchant menu, without allowing a disabled/rollback economy to
@@ -96,10 +97,10 @@ public final class VillagerTradeStockAuthority {
             ToolsmithBackpackMaterialTrades.syncOffers(offers, level);
         }
         if (isMiner(villager)) {
-            GatheredMaterialTrades.syncMinerOffers(offers, inventory);
+            GatheredMaterialTrades.syncMinerOffers(villager, offers, inventory);
         }
         if (isLumberjack(villager)) {
-            GatheredMaterialTrades.syncLumberjackOffers(offers, inventory);
+            GatheredMaterialTrades.syncLumberjackOffers(villager, offers, inventory);
         }
         if (isFarmer(villager)) {
             FarmerGatheredCropTrades.syncOffers(offers, inventory);
@@ -120,6 +121,7 @@ public final class VillagerTradeStockAuthority {
                     VillagerPhysicalStock.snapshot(inventory, level.registryAccess()), level.registryAccess());
         }
         InventoryDrivenProfessionTrades.syncOffers(villager, offers, inventory, level);
+        ProductionMaterialTrades.sync(villager, professionId(villager), offers, inventory);
 
         // Complete mode exposes only real, lawful stock. Random vanilla sell rows with no work authority disappear;
         // player-facing purchase rows remain unchanged.
@@ -158,6 +160,7 @@ public final class VillagerTradeStockAuthority {
         if (offers == null) {
             return false;
         }
+        ProductionMaterialTrades.removeRows(offers);
         offers.forEach(MerchantOffer::resetUses);
         return true;
     }
@@ -179,6 +182,7 @@ public final class VillagerTradeStockAuthority {
             return;
         }
         VillagerWorkInventory inventory = VillagerWorkInventorySavedData.forServer(level.getServer()).inventory(villager.getUUID());
+        VillagerTradeKnowledge.rememberSale(villager, offer);
         if (isMiner(villager) && MinerLapisTrades.isManagedOffer(offer)) {
             OfferStockDecision decision = MinerLapisTrades.decision(offer, inventory);
             debitPhysicalMaterialSale(villager, offers, offer, decision,
@@ -286,6 +290,7 @@ public final class VillagerTradeStockAuthority {
             return false;
         }
         VillagerWorkInventory inventory = VillagerWorkInventorySavedData.forServer(level.getServer()).inventory(villager.getUUID());
+        if (!dev.totem.villagers.runtime.VillageMeeting.availableForSale(villager, offer.getResult(), inventory)) return false;
         if (isMiner(villager) && MinerLapisTrades.isManagedOffer(offer)) {
             if (MinerLapisTrades.decision(offer, inventory) != OfferStockDecision.AVAILABLE
                     || !MinerLapisTrades.debit(inventory)) {
@@ -374,6 +379,9 @@ public final class VillagerTradeStockAuthority {
     ) {
         ItemStack result = offer.getResult();
         VillagerWorkInventory inventory = VillagerWorkInventorySavedData.forServer(level.getServer()).inventory(villager.getUUID());
+        if (!dev.totem.villagers.runtime.VillageMeeting.availableForSale(villager, result, inventory))
+            return OfferStockDecision.INSUFFICIENT_STOCK;
+        if (ProductionMaterialTrades.isRow(offer)) return ProductionMaterialTrades.decision(villager, professionId(villager), inventory, offer);
         if (isMiner(villager) && MinerLapisTrades.isManagedOffer(offer)) {
             return MinerLapisTrades.decision(offer, inventory);
         }

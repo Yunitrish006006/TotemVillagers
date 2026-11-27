@@ -28,6 +28,7 @@ public final class ResourceDiscoveryGameTest {
     public void forestersWalkToTreesBeyondTheFirstPage(GameTestHelper h) { distantHarvest(h, false); }
 
     private void distantHarvest(GameTestHelper h, boolean mine) {
+        h.setTime(3000);
         var level = h.getLevel();
         var server = level.getServer();
         var mode = WorkBackedTradingSettingsSavedData.forServer(server);

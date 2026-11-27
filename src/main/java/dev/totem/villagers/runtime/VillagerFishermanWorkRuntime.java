@@ -87,7 +87,7 @@ public final class VillagerFishermanWorkRuntime {
         VillagerWorkSavedData states = VillagerWorkSavedData.forServer(server);
         VillagerWorkInventorySavedData inventories = VillagerWorkInventorySavedData.forServer(server);
         for (ServerLevel level : server.getAllLevels()) {
-            for (Villager villager : LoadedVillagerCache.loaded(level)) {
+            for (Villager villager : LoadedVillagerCache.workers(level)) {
                 if ("minecraft:fisherman".equals(professionId(villager))) {
                     tickFisherman(level, villager, catalog, states, inventories.inventory(villager.getUUID()),
                             forceIdleScan);

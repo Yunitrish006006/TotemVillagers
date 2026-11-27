@@ -84,7 +84,7 @@ public final class StarterWheatField {
                 .filter(pos -> !WorkerAssignmentSavedData.forServer(level.getServer()).containsZoneCell(level.dimension().identifier().toString(), pos.below()))
                 .sorted(java.util.Comparator.comparingDouble(worker.blockPosition()::distSqr))
                 .filter(pos -> {
-                    if (worker.distanceToSqr(Vec3.atCenterOf(pos)) <= 9) return true;
+                    if (FarmerWorldWorkAction.besideCrop(worker, pos)) return true;
                     var path = worker.getNavigation().createPath(pos, 0);
                     return path != null && path.canReach();
                 }).findFirst().orElse(null);
@@ -122,8 +122,8 @@ public final class StarterWheatField {
             return true;
         }
         if (!WorldWorkPermissions.mayWork(level, worker, crop) || !WorldWorkPermissions.mayWork(level, worker, crop.below())) return true;
-        if (worker.distanceToSqr(Vec3.atCenterOf(crop)) > 9.0) {
-            HouseholdSurvivalRuntime.walk(worker, crop);
+        if (planting ? worker.distanceToSqr(Vec3.atCenterOf(crop)) > 9.0 : !FarmerWorldWorkAction.besideCrop(worker, crop)) {
+            worker.getNavigation().moveTo(crop.getX() + .5, crop.getY(), crop.getZ() + .5, .5);
         } else if (planting && !level.getBlockState(crop).isAir()) {
             return HouseholdSurvivalRuntime.clearFieldGrass(level, worker, crop, inventory);
         } else if (planting) {

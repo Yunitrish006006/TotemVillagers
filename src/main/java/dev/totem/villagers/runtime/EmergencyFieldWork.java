@@ -79,9 +79,8 @@ public final class EmergencyFieldWork {
             if (inventory.countMatchingItem(new ItemStack(Items.WHEAT)) >= 3) {
                 var table = VillageWorktable.near(level, helper, helper.getBrain().getMemory(MemoryModuleType.HOME).orElseThrow().pos());
                 if (table.isPresent()) {
-                    if (helper.distanceToSqr(Vec3.atCenterOf(table.get())) > 16) {
-                        if (approach(helper, table.get())) return true;
-                    } else if (VillageWoodCrafting.craftBread(level, inventory)) return true;
+                    if (!HouseholdSurvivalRuntime.atTable(helper, table.get())) return true;
+                    if (VillageWoodCrafting.craftBread(level, inventory)) return true;
                 }
             }
             if (FarmerWorldWorkAction.bestHoe(inventory).isEmpty()) continue;
@@ -92,7 +91,7 @@ public final class EmergencyFieldWork {
                 var order = HARVEST.matureCropOrderId(level, crop).map(orders::get).orElse(null);
                 if (order == null || !WorldWorkPermissions.mayWork(level, helper, crop)
                         || !WorldWorkPermissions.mayWork(level, helper, soil)) continue;
-                if (helper.distanceToSqr(Vec3.atCenterOf(crop)) <= 9) {
+                if (FarmerWorldWorkAction.besideCrop(helper, crop)) {
                     if (HARVEST.helpHarvest(level, helper, owner, crop, order)) return true;
                 } else if (routes++ < 3 && approach(helper, crop)) return true;
             }

@@ -32,9 +32,46 @@ public final class NaturalStoneFaces {
         for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
             var top = new BlockPos(origin.getMinBlockX() + x, chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z),
                     origin.getMinBlockZ() + z);
-            if (chunk.getBlockState(top).is(Blocks.STONE)) faces.add(top);
+            if (chunk.getBlockState(top).is(Blocks.STONE)) {
+                faces.add(top);
+                continue;
+            }
+            // At most one face per column. Only inspect a shallow band at a height discontinuity.
+            for (Direction dir : Direction.Plane.HORIZONTAL) {
+                var side = top.relative(dir);
+                if (!chunk.getPos().contains(side)) continue;
+                int floor = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, side.getX() & 15, side.getZ() & 15);
+                if (floor >= top.getY() - 1 || floor < top.getY() - 8) continue;
+                var face = new BlockPos(top.getX(), floor + 1, top.getZ());
+                if (chunk.getBlockState(face).is(Blocks.STONE)) {
+                    faces.add(face);
+                    break;
+                }
+            }
         }
         if (!faces.isEmpty()) ((AttachmentTarget)chunk).setAttached(ROCK, List.copyOf(faces));
+    }
+
+    public static List<BlockPos> indexed(ChunkAccess chunk) {
+        return ((AttachmentTarget)chunk).getAttachedOrElse(ROCK, List.of());
+    }
+
+    public static boolean wildFace(ServerLevel level, Villager worker, BlockPos pos) {
+        var chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null || !indexed(chunk).contains(pos) || !chunk.getBlockState(pos).is(Blocks.STONE)
+                || !WorldWorkPermissions.mayUseHouseholdLand(level, worker, pos)) return false;
+        if (!WorldWorkPermissions.clearOfStructures(level, pos)) return false;
+        for (var d : Direction.values()) {
+            var side = pos.relative(d);
+            if (!level.isLoaded(side)) return false;
+            var neighbor = level.getBlockState(side);
+            if (!neighbor.getFluidState().isEmpty() || neighbor.getBlock() instanceof net.minecraft.world.level.block.FallingBlock
+                    || !neighbor.isAir() && !neighbor.is(Blocks.STONE) && !neighbor.is(net.minecraft.tags.BlockTags.DIRT)
+                    && !neighbor.is(Blocks.DEEPSLATE)) return false;
+        }
+        if (!level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,
+                new net.minecraft.world.phys.AABB(pos.above())).isEmpty()) return false;
+        return true;
     }
 
     public static void forget(ChunkAccess chunk, BlockPos pos) {

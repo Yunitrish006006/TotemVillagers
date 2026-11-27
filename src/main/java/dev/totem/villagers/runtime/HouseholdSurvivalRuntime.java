@@ -45,7 +45,7 @@ public final class HouseholdSurvivalRuntime {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (WorkBackedTradingSettingsSavedData.forServer(server).settings().mode() != WorkBackedTradingMode.ENFORCED) return;
             for (ServerLevel level : server.getAllLevels()) {
-                for (Villager worker : LoadedVillagerCache.loaded(level)) {
+                for (Villager worker : LoadedVillagerCache.workers(level)) {
                     if (VillagerRuntimeBudget.due(level.getGameTime(), worker.getUUID(), WORK_INTERVAL)) {
                         HouseholdResourceRequests.reconcile(level, worker);
                         VillagerCareerHistory.observe(worker, WORK_INTERVAL);
@@ -187,14 +187,13 @@ public final class HouseholdSurvivalRuntime {
 
     static boolean atTable(Villager worker, BlockPos table) {
         var center = Vec3.atCenterOf(table);
-        if (worker.distanceToSqr(center) <= 16.0 && worker.level().clip(new net.minecraft.world.level.ClipContext(
+        if (worker.blockPosition().getY() == table.getY() && worker.blockPosition().distManhattan(table) == 1 && worker.level().clip(new net.minecraft.world.level.ClipContext(
                 worker.getEyePosition(), center, net.minecraft.world.level.ClipContext.Block.COLLIDER,
                 net.minecraft.world.level.ClipContext.Fluid.NONE, worker)).getBlockPos().equals(table)) {
             VillagerHeadStatus.clear(worker, VillagerHeadStatus.Kind.UNREACHABLE);
             return true;
         }
-        var path = worker.getNavigation().createPath(table, 1);
-        if (path == null || !path.canReach() || !worker.getNavigation().moveTo(path, .5))
+        if (!VillageWorktable.walkToSide((ServerLevel) worker.level(), worker, table))
             VillagerHeadStatus.report(worker, VillagerHeadStatus.Kind.UNREACHABLE);
         else VillagerHeadStatus.clear(worker, VillagerHeadStatus.Kind.UNREACHABLE);
         return false;

@@ -69,7 +69,7 @@ public final class LumberjackWoodcutterRuntime {
         WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(server);
         List<GeneratedVillageState> generatedVillages = GeneratedVillageSavedData.forServer(server).snapshot();
         for (ServerLevel level : server.getAllLevels()) {
-            List<? extends Villager> villagers = LoadedVillagerCache.loaded(level);
+            List<? extends Villager> villagers = LoadedVillagerCache.workers(level);
             for (Villager lumberjack : villagers) {
                 if (!isLumberjack(lumberjack) || !VillagerWorkNeeds.canWork(lumberjack)
                         || workStates.getOrCreate(lumberjack.getUUID()).activeWork().isPresent()) {

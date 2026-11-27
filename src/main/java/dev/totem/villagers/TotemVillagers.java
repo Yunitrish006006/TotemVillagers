@@ -45,7 +45,13 @@ public final class TotemVillagers implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        dev.totem.villagers.network.TradeSnapshotNetworking.register();
         LoadedVillagerCache.register();
+        dev.totem.villagers.runtime.VillageBellSchedule.register();
+        dev.totem.villagers.runtime.VillagerWorkMemory.register();
+        dev.totem.villagers.trade.VillagerTradeKnowledge.register();
+        dev.totem.villagers.runtime.VillageMeeting.register();
+        dev.totem.villagers.runtime.VillageNoticeBoard.register();
         dev.totem.villagers.world.NaturalOakTimber.register();
         dev.totem.villagers.world.NaturalStoneFaces.register();
         VillagersManual.register();
@@ -68,6 +74,8 @@ public final class TotemVillagers implements ModInitializer {
         ToolsmithVillageEconomyRuntime.register();
         FishermanFuelEconomyRuntime.register();
         VillagerFarmerCompostingRuntime.register();
+        // Give ripe crops the first idle work slot before stocking optional workshop goods.
+        VillagerFarmerWorkRuntime.register();
         VillagerMaterialLogisticsRuntime.register();
         TradeSnapshotRuntime.register();
         VillagerWorkshopRuntime.register();
@@ -76,12 +84,12 @@ public final class TotemVillagers implements ModInitializer {
         VillagerShepherdWorkRuntime.register();
         VillagerFishermanWorkRuntime.register();
         VillagerLibrarianEnchantingRuntime.register();
-        VillagerFarmerWorkRuntime.register();
         VillagerBuilderRuntime.register();
         VillagerFoodEconomyRuntime.register();
         dev.totem.villagers.runtime.VillagerHeadStatus.register();
         GuardConstructionRuntime.register();
         WorldEnablementRuntime.register();
+        LoadedVillagerCache.registerAfterWork();
         LOGGER.info("Totem Villagers initialized with physical villager inventories and finite starter supplies");
     }
 }

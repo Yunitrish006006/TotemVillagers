@@ -14,6 +14,7 @@ public final class TradeSnapshotReason {
             Map.entry("work chest cannot return crafting remainder", "return_unavailable"),
             Map.entry("job site recipe rejected", "job_site_rejected"),
             Map.entry("travelling to job site", "travelling"),
+            Map.entry("waiting for crafting table", "waiting_table"),
             Map.entry("job site changed", "job_site_changed"),
             Map.entry("source changed", "source_changed"),
             Map.entry("world target changed", "target_changed"),

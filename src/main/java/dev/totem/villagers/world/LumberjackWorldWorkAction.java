@@ -66,6 +66,72 @@ public final class LumberjackWorldWorkAction {
         if (trunk == null) {
             return false;
         }
+        List<BlockPos> canopy = zone.naturalTimber() ? List.of(trunk.getLast().above())
+                : harvestableCanopy(level, lumberjack, zone, trunk.getLast());
+        return harvest(level, lumberjack, zone, base, order, inventory, trunk, canopy, base, null);
+    }
+
+    public static BlockPos wildPlantingSite(ServerLevel level, Villager worker, NaturalWorkTrees.Tree tree, Block replacement) {
+        var base = tree.base();
+        // Village piece bounds also enclose open courtyards and forest. Only a feature-recorded
+        // trunk and its own leaf can be cut; every subsequent log replacement revokes the record.
+        for (var pos : tree.logs()) {
+            if (!level.getBlockState(pos).is(tree.log()) || !WorldWorkPermissions.mayUseHouseholdLand(level, worker, pos)) return null;
+        }
+        var leaf = tree.leaf();
+        if (!WorldWorkPermissions.mayUseHouseholdLand(level, worker, leaf)
+                || !level.getBlockState(leaf).is(tree.log() == Blocks.OAK_LOG ? Blocks.OAK_LEAVES : Blocks.MANGROVE_LEAVES)) return null;
+        if (replacement.defaultBlockState().canSurvive(level, base)) return base;
+        for (int down = 0; down <= 8; down++) {
+            for (var pos : BlockPos.betweenClosed(base.offset(-1, -down, -1), base.offset(1, -down, 1))) {
+                if (!level.isLoaded(pos)) continue;
+                var at = level.getBlockState(pos);
+                boolean water = replacement == Blocks.MANGROVE_PROPAGULE && at.is(Blocks.WATER) && at.getFluidState().isSource();
+                if (!at.isAir() && !water) continue;
+                if (replacement.defaultBlockState().canSurvive(level, pos)
+                        && WorldWorkPermissions.mayUseHouseholdLand(level, worker, pos)) return pos.immutable();
+            }
+        }
+        return null;
+    }
+
+    public boolean completeWild(ServerLevel level, Villager worker, NaturalWorkTrees.Tree tree, WorkOrder order,
+                                VillagerWorkInventory inventory) {
+        if (tree == null || !tree.equals(NaturalWorkTrees.at(level, tree.base()))
+                || !WorldWorkNavigation.atWildTarget(level, worker, tree.base())
+                || !"totem:lumberjack".equals(order.professionId())
+                || tree.log().asItem() != BuiltInRegistries.ITEM.getValue(Identifier.parse(order.output().itemId()))) return false;
+        var replacement = BuiltInRegistries.BLOCK.getValue(Identifier.parse(order.worldReplantBlockId()));
+        var site = wildPlantingSite(level, worker, tree, replacement);
+        if (site == null) return false;
+        for (var log : tree.logs()) {
+            for (var direction : net.minecraft.core.Direction.values()) {
+                var side = log.relative(direction);
+                if (!level.isLoaded(side)) return false;
+                var neighbor = level.getBlockState(side);
+                if (neighbor.hasBlockEntity() || neighbor.getBlock() instanceof net.minecraft.world.level.block.FallingBlock
+                        || neighbor.getBlock() instanceof net.minecraft.world.level.block.LadderBlock
+                        || neighbor.getBlock() instanceof net.minecraft.world.level.block.TorchBlock
+                        || neighbor.getBlock() instanceof net.minecraft.world.level.block.WallTorchBlock
+                        || neighbor.getBlock() instanceof net.minecraft.world.level.block.FaceAttachedHorizontalDirectionalBlock
+                        || neighbor.getBlock() instanceof net.minecraft.world.level.block.RailBlock
+                        || neighbor.isSignalSource()) return false;
+            }
+        }
+        var canopy = new ArrayList<BlockPos>();
+        canopy.add(tree.leaf());
+        var fruit = tree.leaf().below();
+        var state = level.getBlockState(fruit);
+        if (state.is(Blocks.MANGROVE_PROPAGULE) && state.getValue(net.minecraft.world.level.block.MangrovePropaguleBlock.HANGING)) {
+            if (!WorldWorkPermissions.mayUseHouseholdLand(level, worker, fruit)) return false;
+            canopy.add(fruit);
+        }
+        return harvest(level, worker, null, tree.base(), order, inventory, tree.logs(), canopy, site, tree);
+    }
+
+    private boolean harvest(ServerLevel level, Villager lumberjack, WorkZone zone, BlockPos base, WorkOrder order,
+                            VillagerWorkInventory inventory, List<BlockPos> trunk, List<BlockPos> canopy,
+                            BlockPos site, NaturalWorkTrees.Tree wild) {
         ItemStack axe = bestAxe(inventory.snapshot()).orElse(null);
         if (axe == null) {
             return false;
@@ -73,19 +139,18 @@ public final class LumberjackWorldWorkAction {
         Identifier replacementId = Identifier.tryParse(order.worldReplantBlockId());
         Block replacement = replacementId == null ? null : BuiltInRegistries.BLOCK.getValue(replacementId);
         if (replacement == null || replacement.asItem() == Items.AIR
-                || !replacement.defaultBlockState().canSurvive(level, base)) {
+                || !replacement.defaultBlockState().canSurvive(level, site)) {
             return false;
         }
-        List<BlockPos> canopy = zone.naturalTimber() ? List.of(trunk.getLast().above())
-                : harvestableCanopy(level, lumberjack, zone, trunk.getLast());
         List<BlockPos> harvestedBlocks = new ArrayList<>(trunk.size() + canopy.size());
         harvestedBlocks.addAll(trunk);
-        harvestedBlocks.addAll(canopy);
+        // Remove any hanging propagule before its support leaf can drop it outside the transaction.
+        harvestedBlocks.addAll(wild == null ? canopy : canopy.reversed());
         List<ItemStack> drops = actualDrops(level, lumberjack, harvestedBlocks, axe);
         // The first household order pays for a plain oak log. Validate the real loot before felling.
-        if (zone.naturalTimber() && drops.stream().noneMatch(stack ->
+        if (zone != null && zone.naturalTimber() && drops.stream().noneMatch(stack ->
                 ItemStack.isSameItemSameComponents(stack, new ItemStack(Items.OAK_LOG)))) return false;
-        boolean rootedGeneratedPlot = isRenewableGeneratedLumberyardPlot(level, lumberjack, base);
+        boolean rootedGeneratedPlot = wild == null && isRenewableGeneratedLumberyardPlot(level, lumberjack, base);
         boolean replacementDropped = drops.stream().anyMatch(stack -> stack.is(replacement.asItem()));
         List<ItemStack> returns = new ArrayList<>(VillageProductionStockPolicy.boundedLumberjackReturns(
                 inventory, drops, replacement.asItem()));
@@ -112,23 +177,30 @@ public final class LumberjackWorldWorkAction {
         for (BlockPos harvestedBlock : harvestedBlocks) {
             captured.put(harvestedBlock, level.getBlockState(harvestedBlock));
         }
+        captured.putIfAbsent(site, level.getBlockState(site));
         for (BlockPos harvestedBlock : harvestedBlocks) {
             if (!level.destroyBlock(harvestedBlock, false, lumberjack, 512)) {
-                restore(level, captured, zone, base, trunk, canopy);
+                restore(level, captured, zone, base, trunk, canopy, wild);
                 reservation.rollback();
                 return false;
             }
         }
-        if (!level.setBlock(base, replacement.defaultBlockState(), 3)) {
-            restore(level, captured, zone, base, trunk, canopy);
+        var planted = replacement.defaultBlockState();
+        if (wild != null && planted.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED))
+            planted = planted.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED,
+                    captured.get(site).is(Blocks.WATER));
+        if (!level.setBlock(site, planted, 3)) {
+            restore(level, captured, zone, base, trunk, canopy, wild);
             reservation.rollback();
             return false;
         }
         if (!reservation.commitWithReturns(returns)) {
-            restore(level, captured, zone, base, trunk, canopy);
+            restore(level, captured, zone, base, trunk, canopy, wild);
             reservation.rollback();
             return false;
         }
+        dev.totem.villagers.trade.GatheredMaterialTrades.recordProducts(lumberjack, returns);
+        if (wild != null) NaturalWorkTrees.planted(level.getChunkAt(site), site);
         lumberjack.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
         lumberjack.playWorkSound();
         return true;
@@ -290,9 +362,11 @@ public final class LumberjackWorldWorkAction {
     }
 
     private static void restore(ServerLevel level, Map<BlockPos, BlockState> captured, WorkZone zone, BlockPos base,
-                                List<BlockPos> trunk, List<BlockPos> canopy) {
+                                List<BlockPos> trunk, List<BlockPos> canopy, NaturalWorkTrees.Tree wild) {
         captured.forEach((position, state) -> level.setBlock(position, state, 3));
-        if (zone.naturalTimber() && captured.entrySet().stream().allMatch(e -> level.getBlockState(e.getKey()).equals(e.getValue())))
+        if (wild != null && captured.entrySet().stream().allMatch(e -> level.getBlockState(e.getKey()).equals(e.getValue())))
+            NaturalWorkTrees.add(level.getChunkAt(base), wild);
+        if (zone != null && zone.naturalTimber() && captured.entrySet().stream().allMatch(e -> level.getBlockState(e.getKey()).equals(e.getValue())))
             NaturalOakTimber.record(level.getChunkAt(base), base, java.util.Set.copyOf(trunk), java.util.Set.copyOf(canopy));
     }
 }

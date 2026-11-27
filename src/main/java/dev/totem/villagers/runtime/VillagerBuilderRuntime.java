@@ -84,7 +84,7 @@ public final class VillagerBuilderRuntime {
                     }
                 }
             }
-            for (Villager villager : LoadedVillagerCache.loaded(level)) {
+            for (Villager villager : LoadedVillagerCache.workers(level)) {
                 if (!"totem:builder".equals(professionId(villager))) {
                     continue;
                 }

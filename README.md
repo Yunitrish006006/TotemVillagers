@@ -8,6 +8,14 @@ Work-backed trading is enabled by default on each world. Sell-side offers
 require stock made by a validated work order; legacy vanilla stock is never
 imported for free.
 
+## Meetings and production-based sales
+
+During vanilla MEET activity, adults at the same bell can agree on a paid ration or an ingredient batch for a live workshop order.
+They remember their trading partner for up to 24,000 world ticks. A meeting creates no items. Actual delivery uses the ordinary local market.
+Right-click a villager to see its current objective. Workshops list finished goods and surplus plain ingredients from their own inventory,
+keeping one production batch of each input. The food reserve and meeting commitments take precedence over player sales.
+Miner and lumberjack shelves use their resource lists and recorded work products. The update keeps existing physical inventories.
+
 ## Current operator flow
 
 All commands require the Minecraft administrator permission.
@@ -50,8 +58,7 @@ Previously generated terrain remains usable with physical wood supplies.
 1. A new world starts in `enforced` mode automatically; no setup command is
    required. `/totemvillagers start` remains available if the world was
    intentionally disabled.
-2. Every initialized adult worker starts with a finite profession tool and one
-   deterministic merchandise batch. A generated-village founder receives the
+2. Adult workers receive finite profession equipment. New workers must acquire or produce merchandise before selling it. A generated-village founder receives the
    finite world endowment described below; a bred child instead receives its
    starting eight emeralds and six bread only by an exact physical transfer of
    four emeralds and three bread from each parent. Open its normal Minecraft

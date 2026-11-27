@@ -81,7 +81,7 @@ public final class VillageWorkshopApprenticeship {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (WorkBackedTradingSettingsSavedData.forServer(server).settings().mode() != WorkBackedTradingMode.ENFORCED) return;
             for (var level : server.getAllLevels()) {
-                for (var resident : LoadedVillagerCache.loaded(level)) {
+                for (var resident : LoadedVillagerCache.workers(level)) {
                     if (!VillagerRuntimeBudget.due(level.getGameTime(), resident.getUUID(), INTERVAL)) continue;
                     observe(level, resident, level.getGameTime());
                     if (role(resident).equals("totem:guard")) GuardEquipmentOrders.observe(level, resident, level.getGameTime());
@@ -267,6 +267,8 @@ public final class VillageWorkshopApprenticeship {
             var sheep = trial.sheep();
             if (wool) {
                 if (!VillagerShepherdWorkRuntime.prepareShearing(level, worker, sheep, seller)) continue;
+            } else if (RecipeBackedWorkshopAction.needsCraftingTable(level, order)) {
+                if (!VillageWorktable.approach(level, worker, site)) continue;
             } else if (!atStation(level, worker, site)) {
                 if (approach(worker, site)) return false;
                 continue;
@@ -343,7 +345,9 @@ public final class VillageWorkshopApprenticeship {
                 if (WorkshopLocalMarket.restock(level, supplier, order, seller)) return false;
                 continue;
             }
-            if (!finishedGoods && !wool && !atStation(level, supplier, job.pos())) {
+            if (!finishedGoods && !wool && RecipeBackedWorkshopAction.needsCraftingTable(level, order)) {
+                if (!VillageWorktable.approach(level, supplier, job.pos())) continue;
+            } else if (!finishedGoods && !wool && !atStation(level, supplier, job.pos())) {
                 if (approach(supplier, job.pos())) return false;
                 continue;
             }
@@ -370,6 +374,7 @@ public final class VillageWorkshopApprenticeship {
                                    VillagerWorkInventory seller, VillagerWorkInventory buyer, ItemStack price,
                                    ItemStack product, VillagerWorkInventorySavedData inventories) {
         if (!order.allowedSources().contains(WorkSource.WORKSHOP) || !order.matchesOutput(product, level.registryAccess())) return false;
+        if (RecipeBackedWorkshopAction.needsCraftingTable(level, order) && !VillageWorktable.approach(level, worker, site)) return false;
         synchronized (inventories) {
             var materials = seller.reserveExact(order.requiredInputs()).orElse(null);
             if (materials == null) return false;
@@ -476,6 +481,10 @@ public final class VillageWorkshopApprenticeship {
     }
 
     static boolean available(ServerLevel level, Villager worker) {
+        return LoadedVillagerCache.workTime(level, worker) && safe(level, worker);
+    }
+
+    static boolean safe(ServerLevel level, Villager worker) {
         var brain = worker.getBrain();
         return !worker.isSleeping() && !worker.isTrading() && !level.isRaided(worker.blockPosition())
                 && !brain.hasMemoryValue(MemoryModuleType.DANGER_DETECTED_RECENTLY)

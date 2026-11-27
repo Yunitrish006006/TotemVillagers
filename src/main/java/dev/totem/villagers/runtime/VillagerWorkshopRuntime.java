@@ -1,4 +1,5 @@
 package dev.totem.villagers.runtime;
+import net.minecraft.resources.Identifier;
 
 import dev.totem.villagers.TotemVillagers;
 import dev.totem.villagers.config.WorkBackedTradingMode;
@@ -117,18 +118,29 @@ public final class VillagerWorkshopRuntime {
         for (var stack : context.inventory().snapshot()) {
             if (!stack.isEmpty()) stock.merge(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount(), Integer::sum);
         }
+        boolean promisedMeal = VillageMeeting.preparingFood(villager);
         return catalog.snapshot().values().stream()
                 .filter(order -> order.professionId().equals(professionId))
                 .filter(order -> order.allowedSources().contains(WorkSource.WORKSHOP))
                 .filter(order -> stockNeedsWork(context.inventory(), order, liveOffers, level))
                 .filter(order -> isLiveWorkshopOrder(order, level, villager, context, liveOffers))
+                // Bread feeds households. Other farm goods can still be crafted from stock, but
+                // only seek their ingredients for a product this farmer actually offers.
+                .filter(order -> !professionId.equals("minecraft:farmer") || order.output().itemId().equals("minecraft:bread")
+                        || hasMatchingSellOffer(order, level, liveOffers))
                 .map(order -> MaterialGap.forOrder(order, stock, context.inventory(), liveOffers, level))
                 .filter(gap -> gap.missingUnits() > 0)
-                .min(java.util.Comparator.comparingInt(MaterialGap::missingTypes)
+                .min(java.util.Comparator.<MaterialGap, Boolean>comparing(gap -> promisedMeal && !foodOrder(gap.order()))
+                        .thenComparingInt(MaterialGap::missingTypes)
                         .thenComparingInt(gap -> -gap.suppliedTypes())
                         .thenComparingLong(MaterialGap::missingUnits)
                         .thenComparing(gap -> gap.order().id()))
                 .map(MaterialGap::order);
+    }
+
+    private static boolean foodOrder(WorkOrder order) {
+        var item = BuiltInRegistries.ITEM.getValue(Identifier.parse(order.output().itemId()));
+        return dev.totem.villagers.needs.VillagerNutrition.nutrition(new ItemStack(item)) > 0;
     }
 
     static Map<String, ItemStack> exactIngredients(WorkOrder order, MerchantOffers offers, ServerLevel level) {
@@ -180,7 +192,7 @@ public final class VillagerWorkshopRuntime {
         VillagerWorkSavedData workStates = VillagerWorkSavedData.forServer(server);
         VillagerWorkInventorySavedData inventories = VillagerWorkInventorySavedData.forServer(server);
         for (ServerLevel level : server.getAllLevels()) {
-            for (Villager villager : LoadedVillagerCache.loaded(level)) {
+            for (Villager villager : LoadedVillagerCache.workers(level)) {
                 MerchantOffers offers = ((AbstractVillagerOffersAccessor) (Object) villager).totemVillagers$existingOffers();
                 tickVillager(level, villager, catalog, offers, workStates, inventories, forceIdleScan);
             }
@@ -231,22 +243,49 @@ public final class VillagerWorkshopRuntime {
             liveOffers = villager.getOffers();
         }
         WorkOrderCatalog effectiveCatalog = WorkOrderCatalogs.effectiveFor(catalog, professionId, liveOffers, level);
+        var deferred = VillagerWorkMemory.deferred(villager);
+        if (deferred != null) {
+            var order = effectiveCatalog.snapshot().get(deferred.orderId());
+            if (order == null || !order.professionId().equals(professionId)) {
+                VillagerWorkMemory.clearDeferred(villager);
+
+            }
+        }
         if (effectiveCatalog.snapshot().values().stream().noneMatch(order -> order.professionId().equals(professionId))) {
             return;
         }
         final WorkOrderCatalog candidateCatalog = effectiveCatalog;
         MerchantOffers candidateOffers = liveOffers;
+        boolean promisedFood = VillageMeeting.preparingFood(villager);
         List<WorkCandidate> candidates = workshop.map(context -> CANDIDATES.candidates(
                         candidateCatalog, professionId, true).stream()
+                .filter(candidate -> !(VillageWorktable.waitingForTable(level, villager, context.jobSite())
+                        && usesTable(level, candidateCatalog.require(candidate.orderId()))))
                 .filter(candidate -> eligibleWorkshopOrder(candidateCatalog.require(candidate.orderId()), level, villager, context, candidateOffers))
                 .filter(candidate -> stockNeedsWork(context.inventory(), candidateCatalog.require(candidate.orderId()), candidateOffers, level))
+                .map(candidate -> promisedFood && foodOrder(candidateCatalog.require(candidate.orderId()))
+                        ? new WorkCandidate(candidate.orderId(), candidate.source(), 0) : candidate)
                 .toList())
                 .orElseGet(List::of);
-        boolean atWorkLocation = workshop.map(context -> atWorkLocation(villager, context.jobSite())).orElse(false);
+        if (deferred != null && state.activeWork().isEmpty()
+                && candidates.stream().anyMatch(candidate -> candidate.orderId().equals(deferred.orderId()))) {
+            state = state.withActiveWork(Optional.of(deferred), state.diagnostic());
+            workStates.put(state);
+            VillagerWorkMemory.clearDeferred(villager);
+        }
+        var currentOrder = state.activeWork().map(active -> candidateCatalog.snapshot().get(active.orderId()));
+        boolean tableWork = currentOrder.filter(order -> usesTable(level, order)).isPresent();
+        boolean atWorkLocation = tableWork ? VillageWorktable.atTable(level, villager) : workshop.map(context -> atWorkLocation(villager, context.jobSite())).orElse(false);
         WorkScheduleInput input = new WorkScheduleInput(
                 villager.getUUID(), professionId, level.getGameTime(), villager.isAlive(),
                 level.isLoaded(villager.blockPosition()), inDanger(villager), villager.isSleeping(),
                 level.isRaided(villager.blockPosition()), workshop.isPresent(), atWorkLocation, candidates);
+        if (tableWork && workshop.isPresent() && VillageWorktable.waitingForTable(level, villager, workshop.get().jobSite())) {
+            VillagerWorkMemory.defer(villager, state.activeWork().orElseThrow());
+            workStates.put(state.withActiveWork(Optional.empty(), Optional.of(new TradeDiagnostic(
+                    currentOrder.orElseThrow().id(), WorkSource.WORKSHOP, state.activeWork().orElseThrow().elapsedTicks(), "waiting for crafting table"))));
+            return;
+        }
         var scheduled = SCHEDULER.tick(effectiveCatalog, state, input);
         VillagerWorkState next = scheduled.state();
         if (scheduled.readyToCommit().isPresent()) {
@@ -258,7 +297,10 @@ public final class VillagerWorkshopRuntime {
         } else if (next.activeWork().isPresent() && workshop.isPresent() && !atWorkLocation && !inDanger(villager)
                 && VillagerRuntimeBudget.dueForNavigationRetry(level, villager)) {
             BlockPos jobSite = workshop.orElseThrow().jobSite();
-            villager.getNavigation().moveTo(jobSite.getX() + .5D, jobSite.getY(), jobSite.getZ() + .5D, .5D);
+            if (tableWork) VillageWorktable.approach(level, villager, jobSite);
+            else if (level.getBlockState(jobSite).is(net.minecraft.world.level.block.Blocks.COMPOSTER))
+                dev.totem.villagers.world.WorldWorkNavigation.moveToReach(level, villager, jobSite, .5D);
+            else villager.getNavigation().moveTo(jobSite.getX() + .5D, jobSite.getY(), jobSite.getZ() + .5D, .5D);
         }
         if (!next.equals(state)) {
             workStates.put(next);
@@ -415,6 +457,14 @@ public final class VillagerWorkshopRuntime {
             return new RecipeBackedWorkshopAction(level, villager, jobSite, order);
         }
         return null;
+    }
+
+    // The server replaces its recipe access on a data-pack reload. Commit still checks the live recipe.
+    private static final java.util.Map<Object, java.util.Map<WorkOrder, Boolean>> TABLE_RECIPES = new java.util.WeakHashMap<>();
+
+    private static boolean usesTable(ServerLevel level, WorkOrder order) {
+        return TABLE_RECIPES.computeIfAbsent(level.recipeAccess(), ignored -> new java.util.WeakHashMap<>())
+                .computeIfAbsent(order, candidate -> RecipeBackedWorkshopAction.needsCraftingTable(level, candidate));
     }
 
     private static boolean atWorkLocation(Villager villager, BlockPos jobSite) {

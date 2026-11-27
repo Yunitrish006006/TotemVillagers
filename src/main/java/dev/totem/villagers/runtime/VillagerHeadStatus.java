@@ -29,7 +29,9 @@ public final class VillagerHeadStatus {
         MAKING_TOOL("item/stick", false), SHEARS("item/shears", true), LOOM("block/loom_front", true), MATERIAL("item/bundle", true),
         MINE_ZONE("block/stone", true), FOREST_ZONE("block/oak_log", true), FURNACE("block/furnace_front", true),
         PICKAXE("item/wooden_pickaxe", true), AXE("item/wooden_axe", true),
-        STRONG_PICKAXE("item/iron_pickaxe", true), NO_MINE_FACE("block/stone", true), NO_TREE("block/oak_log", true);
+        STRONG_PICKAXE("item/iron_pickaxe", true), NO_MINE_FACE("block/stone", true), NO_TREE("block/oak_log", true),
+        WEEDING("item/wooden_hoe", false), RETURNING_HOME("block/red_wool", false),
+        MEETING("block/bell_top", false), SEEKING_RESOURCE("item/compass_00", false), SEEKING_SHEEP("item/shears", false);
 
         public final String sprite;
         final boolean needsHelp;
@@ -99,6 +101,13 @@ public final class VillagerHeadStatus {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (server.getTickCount() % 10 != 0) return;
             boolean enabled = WorkBackedTradingSettingsSavedData.forServer(server).settings().mode() == WorkBackedTradingMode.ENFORCED;
+            if (enabled) for (var level : server.getAllLevels()) for (var worker : LoadedVillagerCache.loaded(level)) {
+                var brain = worker.getBrain();
+                if (worker.isSleeping() || brain.isActive(net.minecraft.world.entity.schedule.Activity.PANIC)
+                        || brain.isActive(net.minecraft.world.entity.schedule.Activity.HIDE)) continue;
+                if (brain.isActive(net.minecraft.world.entity.schedule.Activity.REST)) report(worker, Kind.RETURNING_HOME);
+                else if (brain.isActive(net.minecraft.world.entity.schedule.Activity.MEET)) report(worker, Kind.MEETING);
+            }
             for (var it = SEEN.entrySet().iterator(); it.hasNext();) {
                 var entry = it.next();
                 var worker = entry.getKey();
@@ -106,7 +115,9 @@ public final class VillagerHeadStatus {
                 var entries = entry.getValue();
                 long now = level.getGameTime();
                 if (!enabled || !worker.isAlive() || worker.isRemoved() || worker.isSleeping()) entries.clear();
-                entries.values().removeIf(v -> now - v.last > 220);
+                entries.values().removeIf(v -> now - v.last > (v.display.kind() == Kind.WEEDING ? 25 : 220));
+                if (!worker.getBrain().isActive(net.minecraft.world.entity.schedule.Activity.REST)) entries.remove(Kind.RETURNING_HOME);
+                if (!worker.getBrain().isActive(net.minecraft.world.entity.schedule.Activity.MEET)) entries.remove(Kind.MEETING);
                 Display selected = null;
                 for (var item : entries.entrySet()) {
                     var obs = item.getValue();
@@ -114,6 +125,10 @@ public final class VillagerHeadStatus {
                         selected = obs.display;
                         break;
                     }
+                }
+                for (var activity : java.util.List.of(Kind.RETURNING_HOME, Kind.MEETING)) {
+                    var observation = entries.get(activity);
+                    if (observation != null) selected = observation.display;
                 }
                 if (!java.util.Objects.equals(display(worker), selected)) {
                     var data = (AttachmentTarget)worker;

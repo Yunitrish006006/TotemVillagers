@@ -45,6 +45,7 @@ public final class NaturalOakTimber {
     private NaturalOakTimber() {}
 
     public static void register() {
+        NaturalWorkTrees.register();
         // Initialize the attachment type on startup, before chunk decoding or parallel feature placement.
     }
 
@@ -68,6 +69,16 @@ public final class NaturalOakTimber {
         var next = new ArrayList<>(old);
         next.add(trunk);
         target.setAttached(TRUNKS, List.copyOf(next));
+    }
+
+    /** Older chunks carry positive provenance for simple oak trunks and their crowns. */
+    static List<NaturalWorkTrees.Tree> legacyTrees(ChunkAccess chunk) {
+        var old = ((AttachmentTarget)chunk).getAttached(TRUNKS);
+        if (old == null) return List.of();
+        return old.stream().filter(Trunk::naturalCrown)
+                .map(t -> new NaturalWorkTrees.Tree(Blocks.OAK_LOG,
+                        java.util.stream.IntStream.range(0, t.height()).mapToObj(t.base()::above).toList(),
+                        t.base().above(t.height()))).toList();
     }
 
     public static void forgetChangedLog(ChunkAccess chunk, BlockPos pos) {

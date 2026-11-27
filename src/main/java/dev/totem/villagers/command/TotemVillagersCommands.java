@@ -351,7 +351,8 @@ public final class TotemVillagersCommands {
                 + VillagerNutrition.MAX_FOOD_LEVEL + (VillagerNutrition.isHungry(villager) ? " (hungry)" : " (fed)")
                 + "; saturation " + String.format(java.util.Locale.ROOT, "%.1f", VillagerNutrition.saturationLevel(villager))
                 + "; exhaustion " + String.format(java.util.Locale.ROOT, "%.2f", VillagerNutrition.exhaustionLevel(villager))
-                + "; inventory " + wallet + " emeralds"), false);
+                + "; inventory " + wallet + " emeralds").append(" · ").append(
+                        dev.totem.villagers.runtime.VillageMeeting.goal((net.minecraft.server.level.ServerLevel)villager.level(), villager)), false);
         return 1;
     }
 

@@ -11,6 +11,9 @@
     "main": ["dev.totem.villagers.gametest.HouseholdRestartProbe", "dev.totem.villagers.runtime.ResourceParcelRestartProbe", "dev.totem.villagers.gametest.HeadStatusTrackingServer"],
     "client": ["dev.totem.villagers.client.HeadStatusTrackingClient"],
     "fabric-gametest": [
+      "dev.totem.villagers.trade.TradeKnowledgeGameTest",
+      "dev.totem.villagers.runtime.VillagerDayGameTest",
+      "dev.totem.villagers.runtime.VillageMeetingGameTest",
       "dev.totem.villagers.gametest.ComponentAwareStockGameTest",
       "dev.totem.villagers.gametest.WorkshopRecipeGameTest",
       "dev.totem.villagers.gametest.VanillaSellOfferGateGameTest",
@@ -27,6 +30,7 @@
       "dev.totem.villagers.runtime.ToolsmithApprenticeshipGameTest",
       "dev.totem.villagers.runtime.ResourceDiscoveryGameTest",
       "dev.totem.villagers.runtime.HouseholdForestryGameTest",
+      "dev.totem.villagers.runtime.WildResourceGameTest",
       "dev.totem.villagers.runtime.HouseholdQuarryGameTest",
       "dev.totem.villagers.runtime.GuardEquipmentGameTest",
       "dev.totem.villagers.runtime.ShepherdEquipmentGameTest",
@@ -62,6 +66,8 @@
       "dev.totem.villagers.gametest.WorldEnablementGameTest"
     ],
     "fabric-client-gametest": [
+      "dev.totem.villagers.client.VillageBellScheduleClientGameTest",
+      "dev.totem.villagers.runtime.VillageBoardStandClientGameTest",
       "dev.totem.villagers.client.VillagerHeadStatusClientGameTest",
       "dev.totem.villagers.client.WoodcutterObserverProviderClientGameTest",
       "dev.totem.villagers.client.TradeSnapshotClientGameTest",

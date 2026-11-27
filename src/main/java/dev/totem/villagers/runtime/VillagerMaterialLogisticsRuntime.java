@@ -42,6 +42,7 @@ public final class VillagerMaterialLogisticsRuntime {
 
     /** Public only for the end-to-end GameTest; production invokes this every second. */
     public static void tickForGameTest(MinecraftServer server) {
+        for (var level : server.getAllLevels()) LoadedVillagerCache.invalidate(level);
         transfer(server);
     }
 
@@ -63,7 +64,8 @@ public final class VillagerMaterialLogisticsRuntime {
             for (Villager villager : villagers) {
                 demands.put(villager.getUUID(), VillagerWorkshopRuntime.materialDemandFor(level, villager));
             }
-            for (Villager recipient : villagers) {
+            if (server.overworld().getGameTime() % 100 == 0) VillageMeeting.resolve(level, villagers, inventories, demands);
+            for (Villager recipient : LoadedVillagerCache.workers(level)) {
                 transferOneMissingIngredient(level, recipient, villagers, inventories, demands);
                 if (recipient.getVillagerData().profession().is(net.minecraft.world.entity.npc.villager.VillagerProfession.FLETCHER)
                         || dev.totem.villagers.worker.TotemVillagerProfessions.GUARD_ID.equals(net.minecraft.core.registries.BuiltInRegistries.VILLAGER_PROFESSION.getKey(recipient.getVillagerData().profession().value())))
@@ -105,6 +107,7 @@ public final class VillagerMaterialLogisticsRuntime {
         }
         var rate = purchase.orElseThrow();
         var payment = new ItemStack(Items.EMERALD, rate.emeraldPrice());
+        var preferred = VillageMeeting.supplier(recipient, missing.orElseThrow().itemId());
         var suppliers = villagers.stream()
                 .filter(candidate -> candidate != recipient && VillagerWorkNeeds.canWork(candidate)
                         && VillageWorkshopApprenticeship.available(level, candidate))
@@ -112,10 +115,13 @@ public final class VillagerMaterialLogisticsRuntime {
                 .map(candidate -> supplierFor(level, candidate, inventories, missing.orElseThrow(), rate,
                         demands.getOrDefault(candidate.getUUID(), Optional.empty())))
                 .flatMap(Optional::stream)
-                .sorted(java.util.Comparator.comparingDouble(entry -> recipient.distanceToSqr(entry.villager()))).toList();
+                .sorted(java.util.Comparator.<Supplier, Boolean>comparing(entry -> !entry.villager().getUUID().equals(preferred))
+                        .thenComparingDouble(entry -> recipient.distanceToSqr(entry.villager()))).toList();
         for (var supplier : suppliers) {
+            if (!VillageMeeting.availableTo(supplier.villager(), recipient, List.of(rate.material()), supplier.inventory())) continue;
             if (recipient.distanceToSqr(supplier.villager()) <= HANDOFF_RANGE_SQUARED && recipient.hasLineOfSight(supplier.villager())) {
                 if (!WorkshopLocalMarket.exchange(inventories, supplier.inventory(), recipientInventory, rate.material(), payment)) continue;
+                VillageMeeting.fulfilled(recipient, supplier.villager(), rate.materialId(), rate.material().getCount());
             } else {
                 if (!recipientInventory.canInsertExact(rate.material()) || !supplier.inventory().canInsertExact(payment)) {
                     var copy = inventories.copyAccounts(List.of(recipient.getUUID(), supplier.villager().getUUID()));
@@ -129,6 +135,21 @@ public final class VillagerMaterialLogisticsRuntime {
             return;
         }
         reportShortage(level, recipient, missing.orElseThrow(), exact);
+    }
+
+    static Optional<MaterialPurchase> meetingPurchase(ServerLevel level, Villager buyer, VillagerWorkInventory stock,
+                                                      Optional<WorkOrder> demand) {
+        if (demand.isEmpty()) return Optional.empty();
+        var order = demand.get();
+        var exact = VillagerWorkshopRuntime.exactIngredients(order, buyer.getOffers(), level);
+        return firstMissingIngredient(stock, order, exact).flatMap(need ->
+                purchaseFor(buyer, need, exact.get(need.itemId()), stock.countMatchingItem(new ItemStack(Items.EMERALD))));
+    }
+
+    static boolean canPromise(ServerLevel level, Villager seller, VillagerWorkInventorySavedData inventories,
+                              MaterialPurchase purchase, Optional<WorkOrder> sellerDemand) {
+        return supplierFor(level, seller, inventories, new ItemAmount(purchase.materialId(), purchase.material().getCount()),
+                purchase, sellerDemand).isPresent();
     }
 
     private static Optional<ItemAmount> firstMissingIngredient(VillagerWorkInventory inventory, WorkOrder order, Map<String, ItemStack> exact) {
@@ -218,7 +239,9 @@ public final class VillagerMaterialLogisticsRuntime {
     }
 
     private static void reportShortage(ServerLevel level, Villager worker, ItemAmount missing, ItemStack exact) {
-        if (dev.totem.villagers.work.VillagerWorkSavedData.forServer(level.getServer()).get(worker.getUUID())
+        // An idle farmer stocking the trading menu can keep tending crops without these inputs.
+        if (worker.getVillagerData().profession().is(net.minecraft.world.entity.npc.villager.VillagerProfession.FARMER)
+                || dev.totem.villagers.work.VillagerWorkSavedData.forServer(level.getServer()).get(worker.getUUID())
                 .flatMap(state -> state.activeWork()).isPresent()) {
             VillagerHeadStatus.clear(worker, VillagerHeadStatus.Kind.MATERIAL);
         } else {
@@ -226,7 +249,7 @@ public final class VillagerMaterialLogisticsRuntime {
         }
     }
 
-    private record MaterialPurchase(String materialId, ItemStack material, int emeraldPrice) {
+    record MaterialPurchase(String materialId, ItemStack material, int emeraldPrice) {
     }
 
     private record Supplier(Villager villager, VillagerWorkInventory inventory) {

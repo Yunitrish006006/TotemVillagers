@@ -29,6 +29,7 @@ public final class HouseholdQuarryGameTest {
     @GameTest(environment = "totem:smith_trials", structure = "totem:river_households")
     @SuppressWarnings("unchecked")
     public void quarryTrialPaysForNaturalStoneAndReleasesAnExhaustedFace(GameTestHelper h) {
+        h.setTime(3000);
         var level = h.getLevel();
         var server = level.getServer();
         var mode = WorkBackedTradingSettingsSavedData.forServer(server);
@@ -82,7 +83,7 @@ public final class HouseholdQuarryGameTest {
             wallet.insertExact(new ItemStack(Items.STICK, 2));
             stock.insertExact(new ItemStack(Items.OAK_PLANKS, 3));
             stock.insertExact(new ItemStack(Items.STICK, 2));
-            level.setBlockAndUpdate(worker.blockPosition().south(2), Blocks.CRAFTING_TABLE.defaultBlockState());
+            level.setBlockAndUpdate(worker.blockPosition().south(), Blocks.CRAFTING_TABLE.defaultBlockState());
             var toolCustomer = h.spawnWithNoFreeWill(type, new BlockPos(3, 16, 2));
             toolCustomer.setVillagerData(toolCustomer.getVillagerData().withProfession(BuiltInRegistries.VILLAGER_PROFESSION.wrapAsHolder(
                     BuiltInRegistries.VILLAGER_PROFESSION.getValue(Identifier.parse("totem:lumberjack")))));

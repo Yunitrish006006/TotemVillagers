@@ -42,8 +42,9 @@ public final class VillageLongevityGameTest {
     private static final int SIMULATED_DAYS = simulatedDays();
     private static final int DIGESTS_PER_DAY = 24_000 / VillagerFoodEconomyRuntime.DIGEST_INTERVAL_TICKS;
 
-    @GameTest(maxTicks = 40)
+    @GameTest(structure = "totem:river_households", padding = 40, maxTicks = 40)
     public void coreVillageRemainsFedAndReplacesFarmerHoesForThirtyRenewableDays(GameTestHelper helper) {
+        helper.setTime(3000);
         var level = helper.getLevel();
         var server = level.getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
@@ -88,11 +89,13 @@ public final class VillageLongevityGameTest {
             require(helper, inventories.inventory(lumberjack.getUUID()).insertExact(new ItemStack(Items.OAK_LOG, 64))
                             && inventories.inventory(miner.getUUID()).insertExact(new ItemStack(Items.COBBLESTONE, 64)),
                     "Could not seed renewable specialist output for the long-soak market");
+            var market = farmer.position();
             BlockPos[] crops = prepareField(helper);
             int foodTrades = 0;
 
             for (int day = 1; day <= SIMULATED_DAYS; day++) {
                 for (BlockPos crop : crops) {
+                    farmer.setPos(market);
                     if (!harvest.hasUsableHoe(farmerInventory)) {
                         for (int pass = 0; pass < 8; pass++) {
                             ToolsmithVillageEconomyRuntime.tickForGameTest(server);
@@ -100,10 +103,12 @@ public final class VillageLongevityGameTest {
                     }
                     CropBlock wheat = (CropBlock) Blocks.WHEAT;
                     level.setBlock(crop, wheat.getStateForAge(wheat.getMaxAge()), 3);
+                    farmer.setPos(crop.getX() + .5, crop.getY(), crop.getZ() + .5);
                     require(helper, harvest.complete(level, farmer, crop, wheatOrder, farmerInventory),
                             "Farmer could not obtain and use a replacement hoe on simulated day " + day
                                     + "; " + economySnapshot(inventories, farmer, miner, lumberjack, toolsmith));
                 }
+                farmer.setPos(market);
                 for (int tick = 0; tick < 6 * 41; tick++) {
                     VillagerWorkshopRuntime.tickForGameTest(server);
                 }
@@ -173,6 +178,8 @@ public final class VillageLongevityGameTest {
 
     @SuppressWarnings("unchecked")
     private static Villager spawn(GameTestHelper helper, BlockPos position, String professionId) {
+        if (professionId.equals("minecraft:toolsmith") || professionId.equals("minecraft:farmer"))
+            helper.setBlock(position.north(), Blocks.CRAFTING_TABLE);
         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.fromNamespaceAndPath("minecraft", "villager"));
         require(helper, type != null, "Missing minecraft:villager entity type");
         Villager villager = helper.spawnWithNoFreeWill((EntityType<Villager>) type, position);

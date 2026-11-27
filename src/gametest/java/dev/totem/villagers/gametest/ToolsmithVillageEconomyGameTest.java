@@ -42,6 +42,7 @@ import java.util.UUID;
 public final class ToolsmithVillageEconomyGameTest {
     @GameTest(maxTicks = 40)
     public void toolsmithCraftsAndSellsFishermanAPhysicalFishingRod(GameTestHelper helper) {
+        helper.setTime(3000);
         var level = helper.getLevel();
         var server = level.getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
@@ -87,11 +88,13 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @GameTest(maxTicks = 40)
     public void toolsmithCutsPlantsCraftsLiveStringAndSuppliesFishingRod(GameTestHelper helper) {
+        helper.setTime(3000);
         verifyPlantFishingRodSupply(helper, true);
     }
 
     @GameTest(maxTicks = 40)
     public void toolsmithGathersGrassByHandWhenVillageHasNoIron(GameTestHelper helper) {
+        helper.setTime(3000);
         verifyPlantFishingRodSupply(helper, false);
     }
 
@@ -157,6 +160,7 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @GameTest(maxTicks = 40)
     public void toolsmithRepeatedlyClipsGeneratedVineTrellisWithoutDepletingIt(GameTestHelper helper) {
+        helper.setTime(3000);
         var level = helper.getLevel();
         var server = level.getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
@@ -218,6 +222,7 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @GameTest(maxTicks = 40)
     public void toolsmithBuysWoodAndSmeltedIronThenSellsFarmerAWorkingHoe(GameTestHelper helper) {
+        helper.setTime(3000);
         Economy economy = prepare(helper, true);
         try {
             runSupplyChain(helper, economy, 8);
@@ -241,6 +246,7 @@ public final class ToolsmithVillageEconomyGameTest {
             helper.setBlock(new BlockPos(7, 1, 3), Blocks.FARMLAND);
             CropBlock wheat = (CropBlock) Blocks.WHEAT;
             helper.getLevel().setBlock(crop, wheat.getStateForAge(wheat.getMaxAge()), 3);
+            economy.farmer().setPos(crop.getX() - .5, crop.getY(), crop.getZ() + .5);
             require(helper, new FarmerWorldWorkAction().complete(helper.getLevel(), economy.farmer(), crop,
                             WorkOrderDefinitions.catalog().require("totem:farmer_wheat"), farmer),
                     "Farmer could not work with the purchased iron hoe");
@@ -255,6 +261,7 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @GameTest(maxTicks = 40)
     public void toolsmithUsesLiveSmeltAndCraftingRecipesForCopperReplacementTools(GameTestHelper helper) {
+        helper.setTime(3000);
         Economy economy = prepare(helper, false);
         VillagerWorkInventory miner = economy.inventory(economy.miner());
         try {
@@ -282,6 +289,7 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @GameTest(maxTicks = 40)
     public void minerSmeltsTwoRawIronWhenThatIsEnoughForReplacementShears(GameTestHelper helper) {
+        helper.setTime(3000);
         Economy economy = prepare(helper, false);
         VillagerWorkInventory miner = economy.inventory(economy.miner());
         try {
@@ -306,6 +314,7 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @GameTest(maxTicks = 40)
     public void toolsmithBuysOnlyOneMissingStringForNextFishingRod(GameTestHelper helper) {
+        helper.setTime(3000);
         var level = helper.getLevel();
         var server = level.getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
@@ -348,6 +357,7 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @GameTest(maxTicks = 40)
     public void fragmentedPaymentRequiresNearbySponsorsAndRemainsConserved(GameTestHelper helper) {
+        helper.setTime(3000);
         Economy economy = prepare(helper, false);
         VillagerWorkInventory farmer = economy.inventory(economy.farmer());
         VillagerWorkInventory toolsmith = economy.inventory(economy.toolsmith());
@@ -390,6 +400,7 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @GameTest(maxTicks = 40)
     public void toolsmithFallsBackToMinerStoneWhenNoSmeltedMetalExists(GameTestHelper helper) {
+        helper.setTime(3000);
         Economy economy = prepare(helper, false);
         try {
             runSupplyChain(helper, economy, 8);
@@ -410,6 +421,7 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @GameTest(maxTicks = 40)
     public void toolsmithPrebuysTwoToolBatchesAndPreservesOperatingCash(GameTestHelper helper) {
+        helper.setTime(3000);
         Economy economy = prepare(helper, false);
         VillagerWorkInventory farmer = economy.inventory(economy.farmer());
         VillagerWorkInventory miner = economy.inventory(economy.miner());
@@ -442,6 +454,7 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @GameTest(maxTicks = 40)
     public void toolsmithReplacesAndWorkersConsumeMinerPickaxeAndLumberjackAxe(GameTestHelper helper) {
+        helper.setTime(3000);
         Economy economy = prepare(helper, false);
         VillagerWorkInventory farmer = economy.inventory(economy.farmer());
         VillagerWorkInventory miner = economy.inventory(economy.miner());
@@ -555,6 +568,8 @@ public final class ToolsmithVillageEconomyGameTest {
 
     @SuppressWarnings("unchecked")
     private static Villager spawn(GameTestHelper helper, BlockPos position, String professionId) {
+        if (professionId.equals("minecraft:toolsmith") || professionId.equals("minecraft:farmer"))
+            helper.setBlock(position.north(), Blocks.CRAFTING_TABLE);
         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.fromNamespaceAndPath("minecraft", "villager"));
         require(helper, type != null, "Missing minecraft:villager entity type");
         Villager villager = helper.spawnWithNoFreeWill((EntityType<Villager>) type, position);

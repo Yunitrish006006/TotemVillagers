@@ -65,17 +65,52 @@ public final class GatheredMaterialTrades {
             sale(Items.MANGROVE_PROPAGULE, 8, 1), sale(Items.CHERRY_SAPLING, 8, 1), sale(Items.PALE_OAK_SAPLING, 8, 1)
     );
 
+    // Record uncommon datapack drops only after a successful harvest or workshop transaction.
+    private static final net.fabricmc.fabric.api.attachment.v1.AttachmentType<List<String>> PRODUCTS =
+            net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry.createPersistent(
+                    net.minecraft.resources.Identifier.parse("totem-villagers:gathered_products"),
+                    com.mojang.serialization.Codec.STRING.listOf());
+    public static void recordProducts(net.minecraft.world.entity.npc.villager.Villager worker, List<ItemStack> products) {
+        var data = (net.fabricmc.fabric.api.attachment.v1.AttachmentTarget) worker;
+        var old = data.getAttachedOrElse(PRODUCTS, List.of());
+        var profession = net.minecraft.core.registries.BuiltInRegistries.VILLAGER_PROFESSION.getKey(worker.getVillagerData().profession().value());
+        var added = new java.util.LinkedHashSet<>(old);
+        for (var stack : products) {
+            if (stack.isEmpty() || stack.isDamageableItem() || stack.is(Items.EMERALD)) continue;
+            if (added.size() < 256) added.add(profession + "/" + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()));
+        }
+        if (added.size() != old.size()) data.setAttached(PRODUCTS, List.copyOf(added));
+    }
+
+    static boolean isNativeProduct(net.minecraft.world.entity.npc.villager.Villager v, ItemStack stack, boolean miner) {
+        return allowed(v, stack, miner ? MINER_SALES : LUMBERJACK_SALES);
+    }
+
+    private static boolean allowed(net.minecraft.world.entity.npc.villager.Villager v, ItemStack stack, List<MaterialSale> rows) {
+        if (!ItemStack.isSameItemSameComponents(stack, new ItemStack(stack.getItem()))) return false;
+        if (rows.stream().anyMatch(row -> stack.is(row.item))) return true;
+        if (rows == MINER_SALES && (stack.is(Items.DRIPSTONE_BLOCK) || stack.is(Items.CHARCOAL)
+                || stack.is(Items.IRON_INGOT) || stack.is(Items.COPPER_INGOT))) return true;
+        var block = net.minecraft.world.level.block.Block.byItem(stack.getItem()).defaultBlockState();
+        if (rows == MINER_SALES && (block.is(net.minecraft.tags.BlockTags.STONE_ORE_REPLACEABLES) ||
+                block.is(net.minecraft.tags.BlockTags.DEEPSLATE_ORE_REPLACEABLES))) return true;
+        if (rows == LUMBERJACK_SALES && (stack.is(net.minecraft.tags.ItemTags.PLANKS) || stack.is(net.minecraft.tags.ItemTags.LEAVES))) return true;
+        var role = rows == MINER_SALES ? "totem:miner/" : "totem:lumberjack/";
+        return ((net.fabricmc.fabric.api.attachment.v1.AttachmentTarget)v).getAttachedOrElse(PRODUCTS, List.of())
+                .contains(role + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()));
+    }
+
     private GatheredMaterialTrades() {
     }
 
     /** Adds available Miner rows and removes depleted dynamic rows, including lapis. */
-    public static void syncMinerOffers(MerchantOffers offers, VillagerWorkInventory inventory) {
-        sync(offers, inventory, MINER_SALES, MINER_TOOLS);
+    public static void syncMinerOffers(net.minecraft.world.entity.npc.villager.Villager worker, MerchantOffers offers, VillagerWorkInventory inventory) {
+        sync(worker, offers, inventory, MINER_SALES, MINER_TOOLS);
     }
 
     /** Adds available Lumberjack rows and removes depleted dynamic rows, including apples. */
-    public static void syncLumberjackOffers(MerchantOffers offers, VillagerWorkInventory inventory) {
-        sync(offers, inventory, LUMBERJACK_SALES, LUMBERJACK_TOOLS);
+    public static void syncLumberjackOffers(net.minecraft.world.entity.npc.villager.Villager worker, MerchantOffers offers, VillagerWorkInventory inventory) {
+        sync(worker, offers, inventory, LUMBERJACK_SALES, LUMBERJACK_TOOLS);
     }
 
     public static List<MerchantOffer> minerCatalogOffers() {
@@ -110,14 +145,14 @@ public final class GatheredMaterialTrades {
         return debit(offer, inventory);
     }
 
-    private static void sync(MerchantOffers offers, VillagerWorkInventory inventory,
+    private static void sync(net.minecraft.world.entity.npc.villager.Villager worker, MerchantOffers offers, VillagerWorkInventory inventory,
                              List<MaterialSale> configuredSales, Set<Item> reservedTools) {
         offers.removeIf(offer -> {
             if (!isDynamicOffer(offer)) {
                 return false;
             }
             MaterialSale current = saleFor(offer.getResult(), inventory, configuredSales, reservedTools);
-            boolean invalid = current.count() <= 0 || !current.matches(offer);
+            boolean invalid = !allowed(worker, offer.getResult(), configuredSales) || current.count() <= 0 || !current.matches(offer);
             if (invalid) {
                 // Menus can retain this offer instance until their next sync.
                 // Mark it unavailable before removing it so a depleted or
@@ -128,7 +163,7 @@ public final class GatheredMaterialTrades {
         });
 
         for (ItemStack stack : inventory.snapshot()) {
-            if (stack.isEmpty() || reservedTools.contains(stack.getItem())) {
+            if (stack.isEmpty() || reservedTools.contains(stack.getItem()) || !allowed(worker, stack, configuredSales)) {
                 continue;
             }
             MaterialSale sale = saleFor(stack, inventory, configuredSales, reservedTools);
@@ -155,7 +190,7 @@ public final class GatheredMaterialTrades {
     }
 
     private static boolean isDynamicOffer(MerchantOffer offer) {
-        return offer != null && !offer.getResult().isEmpty()
+        return offer != null && !ProductionMaterialTrades.isRow(offer) && !offer.getResult().isEmpty()
                 && offer.getBaseCostA().is(Items.EMERALD)
                 && offer.getBaseCostA().getCount() > 0
                 && offer.getItemCostB().isEmpty()

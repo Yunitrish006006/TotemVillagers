@@ -163,6 +163,7 @@ public final class VillageWorldgenBootstrapRuntime {
     private static void bootstrap(ServerLevel level, GeneratedVillageState state, GeneratedVillageSavedData villages,
                                   boolean allowEmergencyBuilder) {
         List<Villager> residents = residents(level, state);
+        VillageBoardStand.bootstrap(level, state, residents);
         boolean pendingMangrovePopulation = isMangroveVillage(state) && !state.foundingPopulationSpawned();
         if (residents.isEmpty() && !pendingMangrovePopulation) {
             return;

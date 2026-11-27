@@ -81,13 +81,13 @@ public final class WorldEnablementGameTest {
                     "Ordinary adult worker received minted starter emeralds");
             require(helper, count(inventory, Items.IRON_HOE) == 1,
                     "Farmer did not receive its profession tool");
-            require(helper, count(inventory, Items.BREAD) == 6,
-                    "Farmer profession kit did not contain exactly its deterministic merchandise");
+            require(helper, count(inventory, Items.BREAD) == 0,
+                    "Farmer received retail bread before producing any");
 
             VillagerStarterSupplyRuntime.tickForGameTest(server);
             require(helper, count(inventory, Items.EMERALD) == 0
                             && count(inventory, Items.IRON_HOE) == 1
-                            && count(inventory, Items.BREAD) == 6,
+                            && count(inventory, Items.BREAD) == 0,
                     "Starter kit was granted more than once");
             helper.succeed();
         } finally {

@@ -43,10 +43,18 @@ public final class TradeSnapshotSender {
     }
 
     public static void send(ServerPlayer player, Villager villager, MerchantOffers offers, int containerId) {
-        if (!(villager.level() instanceof ServerLevel level)) {
+        if (!(villager.level() instanceof ServerLevel level) || !ServerPlayNetworking.canSend(player, TradeSnapshotPayload.TYPE)) {
             return;
         }
-        ServerPlayNetworking.send(player, snapshot(level, villager, offers, containerId));
+        TradeSnapshotPayload payload;
+        try {
+            payload = snapshot(level, villager, offers, containerId);
+        } catch (IllegalArgumentException outOfBounds) {
+            // An optional diagnostic from a custom trade must not interrupt the vanilla menu.
+            dev.totem.villagers.TotemVillagers.LOGGER.debug("Trade diagnostics outside wire bounds for {}", villager.getUUID(), outOfBounds);
+            return;
+        }
+        ServerPlayNetworking.send(player, payload);
     }
 
     public static TradeSnapshotPayload snapshot(ServerLevel level, Villager villager, MerchantOffers offers, int containerId) {
@@ -56,7 +64,7 @@ public final class TradeSnapshotSender {
         Optional<TradeSnapshotPayload.WorkZoneStatus> workZone = workZoneFeedback(level, villager);
         Optional<TradeSnapshotPayload.GuardPostStatus> guardPost = guardPostFeedback(level, villager);
         if (!mode.enforcesWorkBackedTrading()) {
-            return new TradeSnapshotPayload(containerId, villager.getUUID(), List.of(), inventory, protectedMaterials, workZone, guardPost);
+            return new TradeSnapshotPayload(containerId, villager.getUUID(), List.of(), inventory, protectedMaterials, workZone, guardPost, villager.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME));
         }
         VillagerWorkState state = VillagerWorkSavedData.forServer(level.getServer()).getOrCreate(villager.getUUID());
         MerchantStock stock = VillagerPhysicalStock.snapshot(
@@ -65,10 +73,11 @@ public final class TradeSnapshotSender {
         WorkOrderCatalog catalog = effectiveCatalog(level, villager, offers);
         List<TradeSnapshotPayload.Offer> entries = java.util.stream.IntStream.range(0, offers.size())
                 .filter(index -> VillagerOfferSides.isVillagerSellOffer(offers.get(index)))
+                .limit(TradeSnapshotPayload.MAX_OFFERS)
                 .mapToObj(index -> offerSnapshot(index, offers.get(index), state, stock, catalog, level,
                         villager))
                 .toList();
-        return new TradeSnapshotPayload(containerId, villager.getUUID(), entries, inventory, protectedMaterials, workZone, guardPost);
+        return new TradeSnapshotPayload(containerId, villager.getUUID(), entries, inventory, protectedMaterials, workZone, guardPost, villager.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME));
     }
 
     private static TradeSnapshotPayload.Offer offerSnapshot(
@@ -84,6 +93,7 @@ public final class TradeSnapshotSender {
         String itemId = result.isEmpty() ? "minecraft:air" : BuiltInRegistries.ITEM.getKey(result.getItem()).toString();
         StockVariantKey key = result.isEmpty() ? StockVariantKey.base(itemId) : StockVariantKey.fromStack(result, level.registryAccess());
         int villagerLevel = villager.getVillagerData().level();
+        if (ProductionMaterialTrades.isRow(offer)) return physicalMaterialOffer(index, itemId, result, level, villager, null);
         if (MinerLapisTrades.isManagedOffer(offer)) {
             return physicalMaterialOffer(index, itemId, result, level, villager,
                     catalog.snapshot().get("totem:miner_lapis_lazuli"));
@@ -152,6 +162,11 @@ public final class TradeSnapshotSender {
         int progress = active.map(dev.totem.villagers.work.ActiveWork::elapsedTicks)
                 .or(() -> diagnostic.map(TradeDiagnostic::progressTicks)).orElse(0);
         String blocked = diagnostic.map(TradeDiagnostic::blockedReason).map(TradeSnapshotReason::codeFor).orElse("");
+        var deferred = dev.totem.villagers.runtime.VillagerWorkMemory.deferred(villager);
+        if (deferred != null && deferred.orderId().equals(order.id())) {
+            blocked = "waiting_table";
+            progress = deferred.elapsedTicks();
+        }
         if (blocked.isBlank() && available < result.getCount()) {
             blocked = "awaiting_stock";
         }
@@ -207,6 +222,18 @@ public final class TradeSnapshotSender {
         String professionId = professionKey == null ? "minecraft:none" : professionKey.toString();
         BlockCoordinate position = new BlockCoordinate(villager.getBlockX(), villager.getBlockY(), villager.getBlockZ());
         WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(level.getServer());
+        var parcel = dev.totem.villagers.worker.ProductionParcel.get(level.getServer()).claim(villager.getUUID());
+        if (parcel.isPresent() && !parcel.get().cells().isEmpty()) {
+            var claim = parcel.get();
+            var extent = net.minecraft.world.level.levelgen.structure.BoundingBox.encapsulatingPositions(claim.cells()).orElseThrow();
+            var dimension = claim.station().dimension();
+            boolean inside = claim.cells().stream().anyMatch(cell -> cell.getX() == position.x() && cell.getZ() == position.z()
+                    && Math.abs(cell.getY() - position.y()) <= 1);
+            var status = !dimension.equals(level.dimension()) ? "other_dimension" : inside ? "inside" : "outside";
+            return Optional.of(new TradeSnapshotPayload.WorkZoneStatus(professionId, status, claim.worker().toString(),
+                    Optional.of(new TradeSnapshotPayload.WorkZoneBoundary(dimension.identifier().toString(), extent.minX(),
+                            extent.minY(), extent.minZ(), extent.maxX(), extent.maxY(), extent.maxZ()))));
+        }
         return WorkZoneFeedback.evaluate(villager.getUUID(), professionId, level.dimension().identifier().toString(), position,
                         assignments.getAssignment(villager.getUUID()), assignments.zoneSnapshot())
                 .map(feedback -> new TradeSnapshotPayload.WorkZoneStatus(feedback.roleId(), feedback.state().id(),

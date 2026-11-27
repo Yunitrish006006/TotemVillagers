@@ -40,6 +40,7 @@ import net.minecraft.world.level.block.Blocks;
 public final class PlayableFarmerCycleGameTest {
     @GameTest(maxTicks = 80)
     public void playerMaterialsBecomeAnAvailableVanillaFarmerTrade(GameTestHelper helper) {
+        helper.setTime(3000);
         var server = helper.getLevel().getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
         BlockPos relativeJobSite = new BlockPos(3, 2, 3);
@@ -102,6 +103,7 @@ public final class PlayableFarmerCycleGameTest {
 
     @GameTest(maxTicks = 40)
     public void villageBreadUsesTheLiveRecipeWithoutAPlayerFacingOffer(GameTestHelper helper) {
+        helper.setTime(3000);
         var server = helper.getLevel().getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
         BlockPos relativeJobSite = new BlockPos(3, 2, 3);
@@ -185,6 +187,7 @@ public final class PlayableFarmerCycleGameTest {
 
     @SuppressWarnings("unchecked")
     private static Villager spawnFarmer(GameTestHelper helper, BlockPos relativePosition) {
+        helper.setBlock(relativePosition.west(), Blocks.CRAFTING_TABLE);
         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.fromNamespaceAndPath("minecraft", "villager"));
         require(helper, type != null, "Missing minecraft:villager entity type");
         Villager villager = helper.spawnWithNoFreeWill((EntityType<Villager>) type, relativePosition);

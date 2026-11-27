@@ -75,8 +75,19 @@ public final class FarmerWorldWorkAction {
                 dev.totem.villagers.inventory.VillagerWorkInventorySavedData.forServer(level.getServer()).inventory(helper.getUUID()));
     }
 
+    public static boolean besideCrop(Villager worker, BlockPos crop) {
+        var feet = BlockPos.containing(worker.getX(), worker.getY() + 0.125, worker.getZ());
+        if (Math.abs(feet.getX() - crop.getX()) > 1 || Math.abs(feet.getZ() - crop.getZ()) > 1
+                || Math.abs(worker.getY() - crop.getY()) > 1.125) return false;
+        var hit = worker.level().clip(new net.minecraft.world.level.ClipContext(worker.getEyePosition(),
+                net.minecraft.world.phys.Vec3.atCenterOf(crop), net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                net.minecraft.world.level.ClipContext.Fluid.NONE, worker));
+        return hit.getType() == net.minecraft.world.phys.HitResult.Type.MISS || hit.getBlockPos().equals(crop);
+    }
+
     private boolean harvest(ServerLevel level, Villager farmer, BlockPos cropPosition, CropDefinition crop,
                             VillagerWorkInventory inventory) {
+        if (!besideCrop(farmer, cropPosition)) return false;
         BlockState original = level.getBlockState(cropPosition);
         ItemStack hoe = bestHoe(inventory).orElse(null);
         if (hoe == null) {

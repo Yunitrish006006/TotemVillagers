@@ -40,8 +40,12 @@ public final class SpecialistMaterialTradesGameTest {
             MerchantOffer emeraldLoop = new MerchantOffer(new ItemCost(Items.EMERALD, 2),
                     new ItemStack(Items.EMERALD, 8), 16, 1, 0.05F);
             lumberjackOffers.add(emeraldLoop);
+            VillagerWorkInventory minerInventory = VillagerWorkInventorySavedData.forServer(server).inventory(miner.getUUID());
+            minerInventory.insertExact(new ItemStack(Items.CLOCK));
             VillagerTradeStockAuthority.refreshOffers(miner, minerOffers);
             VillagerTradeStockAuthority.refreshOffers(lumberjack, lumberjackOffers);
+            require(helper, minerOffers.stream().noneMatch(row -> row.getResult().is(Items.CLOCK)),
+                    "Unrelated belongings became gathered merchandise");
             MerchantOffer lapis = minerOffers.stream().filter(MinerLapisTrades::isManagedOffer).findFirst().orElse(null);
             MerchantOffer apples = lumberjackOffers.stream().filter(LumberjackAppleTrades::isManagedOffer).findFirst().orElse(null);
             require(helper, lapis == null && apples == null,
@@ -49,7 +53,6 @@ public final class SpecialistMaterialTradesGameTest {
             require(helper, emeraldLoop.isOutOfStock() && !lumberjackOffers.contains(emeraldLoop),
                     "Emerald-for-emerald self exchange survived the server trade gate");
 
-            VillagerWorkInventory minerInventory = VillagerWorkInventorySavedData.forServer(server).inventory(miner.getUUID());
             VillagerWorkInventory lumberjackInventory = VillagerWorkInventorySavedData.forServer(server).inventory(lumberjack.getUUID());
             require(helper, minerInventory.insertExact(new ItemStack(Items.EMERALD, 8)),
                     "Could not seed Miner operating currency");

@@ -82,6 +82,7 @@ public final class MinerWorldWorkAction {
             return false;
         }
         if (reserved.get().commitWithReturns(returned)) {
+            dev.totem.villagers.trade.GatheredMaterialTrades.recordProducts(miner, plan.drops());
             MinerOreSafetySavedData.forServer(level.getServer())
                     .recordMine(miner.getUUID(), plan.incidentalIron());
             extension.ifPresent(plannedExtension -> plannedExtension.apply(level));

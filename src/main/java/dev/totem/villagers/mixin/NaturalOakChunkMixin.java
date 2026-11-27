@@ -18,10 +18,15 @@ abstract class NaturalOakChunkMixin {
     private void totemVillagers$forgetEditedTrunk(BlockPos pos, BlockState state, int flags,
                                                    CallbackInfoReturnable<BlockState> result) {
         BlockState old = result.getReturnValue();
+        if (old != null && (old.is(Blocks.OAK_SAPLING) || old.is(Blocks.MANGROVE_PROPAGULE)) && !state.is(old.getBlock()))
+            dev.totem.villagers.world.NaturalWorkTrees.forgetSeed((ChunkAccess)(Object)this, pos);
         if (old != null && old.is(Blocks.STONE) && !state.is(Blocks.STONE))
             dev.totem.villagers.world.NaturalStoneFaces.forget((ChunkAccess)(Object)this, pos);
         if (old != null && (old.is(Blocks.SMITHING_TABLE) || old.is(Blocks.LECTERN)) && !state.is(old.getBlock()))
             dev.totem.villagers.runtime.GuardEquipmentOrders.removedTable((ChunkAccess)(Object)this, pos);
+        if (old != null && old != state && (old.is(Blocks.OAK_LOG) || old.is(Blocks.MANGROVE_LOG)
+                || (old.is(Blocks.OAK_LEAVES) || old.is(Blocks.MANGROVE_LEAVES)) && !state.is(old.getBlock())))
+            dev.totem.villagers.world.NaturalWorkTrees.forget((ChunkAccess)(Object)this, pos);
         if (old != null && old != state && old.is(Blocks.OAK_LOG)) {
             NaturalOakTimber.forgetChangedLog((ChunkAccess) (Object) this, pos);
         } else if (old != null && old.is(Blocks.OAK_LEAVES) && (!state.is(Blocks.OAK_LEAVES)

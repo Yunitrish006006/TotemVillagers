@@ -54,9 +54,13 @@ public final class TradeSnapshotClient {
      * state inside the renderer.</p>
      */
     static void accept(TradeSnapshotPayload snapshot) {
+        acceptProjection(snapshot.containerId(), snapshot);
+    }
+
+    static void acceptProjection(int containerId, TradeSnapshotPayload snapshot) {
         synchronized (SNAPSHOTS) {
-            SNAPSHOTS.remove(snapshot.containerId());
-            SNAPSHOTS.put(snapshot.containerId(), snapshot);
+            SNAPSHOTS.remove(containerId);
+            SNAPSHOTS.put(containerId, snapshot);
             while (SNAPSHOTS.size() > MAX_RETAINED_MENUS) {
                 Integer oldest = SNAPSHOTS.keySet().iterator().next();
                 SNAPSHOTS.remove(oldest);

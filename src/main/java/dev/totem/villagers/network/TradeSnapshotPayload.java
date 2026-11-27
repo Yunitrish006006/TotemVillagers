@@ -22,11 +22,12 @@ public record TradeSnapshotPayload(
         List<WorkInventorySlot> workInventory,
         List<ReservedMaterial> reservedMaterials,
         Optional<WorkZoneStatus> workZone,
-        Optional<GuardPostStatus> guardPost
+        Optional<GuardPostStatus> guardPost,
+        Optional<net.minecraft.core.GlobalPos> home
 ) implements CustomPacketPayload {
     public static final Type<TradeSnapshotPayload> TYPE = new Type<>(
-            Identifier.fromNamespaceAndPath("totem-villagers", "trade_snapshot"));
-    private static final int MAX_OFFERS = 64;
+            Identifier.fromNamespaceAndPath("totem-villagers", "trade_snapshot_v2"));
+    public static final int MAX_OFFERS = 64;
     private static final int MAX_ITEM_ID_LENGTH = 128;
     private static final int MAX_SOURCE_LENGTH = 16;
     private static final int MAX_REASON_LENGTH = 64;
@@ -199,6 +200,12 @@ public record TradeSnapshotPayload(
         guardPost = guardPost == null ? Optional.empty() : guardPost;
     }
 
+    public TradeSnapshotPayload(int containerId, UUID villagerId, List<Offer> offers, List<WorkInventorySlot> workInventory,
+                                List<ReservedMaterial> reservedMaterials, Optional<WorkZoneStatus> workZone,
+                                Optional<GuardPostStatus> guardPost) {
+        this(containerId, villagerId, offers, workInventory, reservedMaterials, workZone, guardPost, Optional.empty());
+    }
+
     /** Compatibility constructor for an offer-only snapshot. */
     public TradeSnapshotPayload(int containerId, UUID villagerId, List<Offer> offers) {
         this(containerId, villagerId, offers, List.of(), List.of(), Optional.empty(), Optional.empty());
@@ -285,6 +292,7 @@ public record TradeSnapshotPayload(
                         buffer.writeVarInt(construction.totalSteps());
                     });
                 });
+                buffer.writeOptional(payload.home(), FriendlyByteBuf::writeGlobalPos);
             },
             buffer -> {
                 int containerId = buffer.readVarInt();
@@ -371,7 +379,7 @@ public record TradeSnapshotPayload(
                     guardPost = Optional.of(new GuardPostStatus(state, managedGolems, defenceDemand, nearbyThreats,
                             post, construction));
                 }
-                return new TradeSnapshotPayload(containerId, villagerId, offers, workInventory, reservedMaterials, workZone, guardPost);
+                return new TradeSnapshotPayload(containerId, villagerId, offers, workInventory, reservedMaterials, workZone, guardPost, buffer.readableBytes() > 0 ? buffer.readOptional(FriendlyByteBuf::readGlobalPos) : Optional.empty());
             }
     );
 

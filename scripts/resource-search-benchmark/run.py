@@ -42,7 +42,8 @@ def instrument(name, variants):
     (package / (name+".java")).write_text(contents)
 instrument("BoundedZoneTargetFinder", [(s, s+" "+counter+".cells++;") for s in
            ["BlockPos candidate = cursor.positions.next();", "BlockPos candidate = new BlockPos(x, y, z);"]])
-instrument("WorldWorkNavigation", [("stance -> worker.getNavigation().createPath(stance.below(), 0)",
+instrument("WorldWorkNavigation", [("Path path = wild ?",
+                                    counter + ".paths++; Path path = wild ?"), ("stance -> worker.getNavigation().createPath(stance.below(), 0)",
                                    "stance -> { "+counter+".paths++; return worker.getNavigation().createPath(stance.below(), 0); }")])
 instrument("MinerFurnaceWorkstation", [(s, s+" "+counter+".furnaces++;") for s in
            ["for (var pos : chunk.getBlockEntities().keySet()) {", "BlockPos station = new BlockPos(x, y, z);"]])

@@ -10,6 +10,7 @@
     "main": ["dev.totem.villagers.TotemVillagers"],
     "client": ["dev.totem.villagers.client.TotemVillagersClient"],
     "totem:observer_screen_provider": [
+      "dev.totem.villagers.client.TradeObserverProvider",
       "dev.totem.villagers.client.WoodcutterObserverScreenProvider"
     ]
   },

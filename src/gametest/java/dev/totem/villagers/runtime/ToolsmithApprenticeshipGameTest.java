@@ -50,6 +50,7 @@ public final class ToolsmithApprenticeshipGameTest {
     @GameTest(environment = "totem:smith_trials")
     @SuppressWarnings("unchecked")
     public void foodForecastWaitsForEdibleHarvestAndProtectsHungryResidents(GameTestHelper h) {
+        h.setTime(3000);
         var level = h.getLevel();
         var type = (EntityType<Villager>) BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse("minecraft:villager"));
         var farmer = h.spawnWithNoFreeWill(type, new BlockPos(3, 3, 3));
@@ -120,6 +121,7 @@ public final class ToolsmithApprenticeshipGameTest {
     public void builderPaysLibrarianToSupplyLibraryShelf(GameTestHelper h) { checkTrial(h, Trial.LIBRARY); }
 
     private static void mapForGuard(GameTestHelper h, Villager librarian, EntityType<Villager> type, UUID owner) {
+        h.setTime(3000);
         var level = h.getLevel();
         var server = level.getServer();
         var guard = h.spawnWithNoFreeWill(type, new BlockPos(4, 3, 3));
@@ -254,6 +256,7 @@ public final class ToolsmithApprenticeshipGameTest {
         boolean miner = trial != Trial.UNEMPLOYED_SMITH && !wool && !library;
         boolean masonry = trial == Trial.MASON;
         var source = arrows ? "totem:lumberjack" : "totem:miner";
+        h.setTime(3000);
         var level = h.getLevel();
         var server = level.getServer();
         var settings = WorkBackedTradingSettingsSavedData.forServer(server);
@@ -279,6 +282,7 @@ public final class ToolsmithApprenticeshipGameTest {
                 new BlockCoordinate(spareMine.getX(), spareMine.getY(), spareMine.getZ()),
                 new BlockCoordinate(spareMine.getX(), spareMine.getY() + 3, spareMine.getZ())));
         var table = anchor.north();
+        level.setBlockAndUpdate(smith.blockPosition().south(), Blocks.CRAFTING_TABLE.defaultBlockState());
         try {
             for (int i = 0; i < residents.size(); i++) {
                 var v = residents.get(i);

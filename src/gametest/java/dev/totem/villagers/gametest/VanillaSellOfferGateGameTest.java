@@ -52,6 +52,42 @@ public final class VanillaSellOfferGateGameTest {
      * each profession's deterministic lawful stock creates its own visible row,
      * while an unrelated inventory item never becomes merchandise.
      */
+    @GameTest(maxTicks = 40)
+    public void clericSellsSurplusDustAndKeepsEnoughForOneGlowstone(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        var settings = WorkBackedTradingSettingsSavedData.forServer(server);
+        var previous = settings.settings().mode();
+        var villager = spawnVillager(helper, new BlockPos(2, 2, 2));
+        try {
+            settings.setMode(WorkBackedTradingMode.ENFORCED);
+            setMaximumLevelProfession(villager, "cleric");
+            var offers = new MerchantOffers();
+            ((AbstractVillagerOffersAccessor)(Object)villager).totemVillagers$setExistingOffers(offers);
+            var inventory = VillagerWorkInventorySavedData.forServer(server).inventory(villager.getUUID());
+            inventory.insertExact(new ItemStack(Items.GLOWSTONE_DUST, 5));
+            inventory.insertExact(new ItemStack(Items.DIRT, 64));
+            VillagerTradeStockAuthority.refreshOffers(villager, offers);
+            var dust = offers.stream().filter(row -> row.getResult().is(Items.GLOWSTONE_DUST)).findFirst().orElseThrow();
+            require(helper, !dust.isOutOfStock() && offers.stream().noneMatch(row -> row.getResult().is(Items.DIRT)), "Illegal shelf");
+            var ops = helper.getLevel().registryAccess().createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE);
+            var saved = MerchantOffer.CODEC.encodeStart(ops, dust).getOrThrow();
+            var loaded = MerchantOffer.CODEC.parse(ops, saved).getOrThrow();
+            require(helper, ((dev.totem.villagers.trade.ProductionMaterialRow)loaded.copy()).totemVillagers$isMaterial(),
+                    "Reload or copy discarded the raw-sale marker");
+            VillagerTradeStockAuthority.debitAfterSuccessfulTrade(villager, dust);
+            require(helper, inventory.countMatchingItem(new ItemStack(Items.GLOWSTONE_DUST)) == 4
+                    && dust.isOutOfStock() && !offers.contains(dust), "Sold raw material reserved for the next recipe");
+            offers.add(loaded);
+            settings.setMode(WorkBackedTradingMode.VANILLA_ROLLBACK);
+            VillagerTradeStockAuthority.refreshOffers(villager, offers);
+            require(helper, loaded.isOutOfStock() && !offers.contains(loaded), "Rollback left a free surplus offer");
+            helper.succeed();
+        } finally {
+            settings.setMode(previous);
+            villager.discard();
+        }
+    }
+
     @GameTest(maxTicks = 80)
     public void everyProfessionPublishesPhysicalLawfulStockWithoutARandomSellRoll(GameTestHelper helper) {
         var server = helper.getLevel().getServer();

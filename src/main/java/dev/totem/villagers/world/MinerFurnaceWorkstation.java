@@ -63,6 +63,15 @@ public final class MinerFurnaceWorkstation {
     private MinerFurnaceWorkstation() {
     }
 
+    /** A miner without a zone may continue using an already claimed, safe furnace. */
+    public static boolean hasIndependentFurnace(ServerLevel level, Villager worker) {
+        return worker.getBrain().getMemory(MemoryModuleType.JOB_SITE).filter(site -> site.dimension().equals(level.dimension()))
+                .map(GlobalPos::pos).filter(p -> level.isLoaded(p) && level.getBlockState(p).is(Blocks.FURNACE)
+                        && WorldWorkPermissions.mayUseHouseholdLand(level, worker, p) && !claimedByAnotherMiner(level, worker, p)
+                        && level.getBlockEntity(p) instanceof net.minecraft.world.level.block.entity.FurnaceBlockEntity f
+                        && !f.isLocked() && f.getCustomName() == null && f.isEmpty()).isPresent();
+    }
+
     /** Uses the existing valid job site or claims an unclaimed, reachable Furnace in the assigned Zone. */
     public static Optional<BlockPos> ensureAssigned(ServerLevel level, Villager miner, WorkZone zone) {
         Optional<BlockPos> current = miner.getBrain().getMemory(MemoryModuleType.JOB_SITE)

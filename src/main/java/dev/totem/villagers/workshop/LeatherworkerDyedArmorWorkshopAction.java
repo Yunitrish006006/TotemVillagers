@@ -55,7 +55,7 @@ public final class LeatherworkerDyedArmorWorkshopAction implements ValidatedWork
     @Override
     public boolean complete() {
         if (!villager.isAlive() || !isLeatherworker(villager)
-                || villager.distanceToSqr(Vec3.atCenterOf(jobSite)) > WORK_REACH_SQUARED
+                || !dev.totem.villagers.runtime.VillageWorktable.atTable(level, villager)
                 || !supports(order, level, jobSite, offers)) {
             return false;
         }

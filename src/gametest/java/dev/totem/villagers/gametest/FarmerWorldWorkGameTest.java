@@ -34,6 +34,7 @@ public final class FarmerWorldWorkGameTest {
     public void farmerReplacesMissingHoeFromTwoLogsAndResumesHarvest(GameTestHelper helper) {
         var level = helper.getLevel();
         var server = level.getServer();
+        helper.setTime(3000);
         BlockPos composter = helper.absolutePos(new BlockPos(7, 2, 7));
         Villager farmer = spawnVillager(helper, new BlockPos(7, 2, 8));
         Villager lumberjack = spawnVillager(helper, new BlockPos(6, 2, 8));
@@ -49,7 +50,7 @@ public final class FarmerWorldWorkGameTest {
             VillagerNutrition.setFoodLevel(farmer, 20);
             level.setBlockAndUpdate(composter, Blocks.COMPOSTER.defaultBlockState());
             farmer.getBrain().setMemory(MemoryModuleType.JOB_SITE, GlobalPos.of(level.dimension(), composter));
-            BlockPos site = composter.east();
+            BlockPos site = farmer.blockPosition().east();
             for (var direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
                 level.setBlockAndUpdate(composter.relative(direction).below(), Blocks.STONE.defaultBlockState());
             }
@@ -90,6 +91,7 @@ public final class FarmerWorldWorkGameTest {
                     && inventory.countMatchingItem(new ItemStack(Items.WOODEN_HOE)) == 0, "Farmer crafted through a wall");
             level.removeBlock(wall, false);
             level.removeBlock(wall.above(), false);
+            farmer.snapTo(net.minecraft.world.phys.Vec3.atBottomCenterOf(wall));
             VillagerFarmerWorkRuntime.tickForGameTest(server);
             require(helper, inventory.countMatchingItem(current) == 1
                     && inventory.countMatchingItem(new ItemStack(Items.WOODEN_HOE)) == 1
@@ -103,12 +105,13 @@ public final class FarmerWorldWorkGameTest {
         }
     }
 
-    @GameTest(maxTicks = 40)
+    @GameTest(structure = "totem:river_households", padding = 40, maxTicks = 40)
     public void matureWheatSuppliesThePersonalInventoryAndIsReplanted(GameTestHelper helper) {
         BlockPos crop = helper.absolutePos(new BlockPos(8, 3, 8));
         Villager farmer = spawnVillager(helper, new BlockPos(7, 2, 7));
         try {
             setFarmer(farmer);
+            farmer.setPos(crop.getX() + .5, crop.getY(), crop.getZ() + .5);
             helper.getLevel().setBlock(crop.below(), Blocks.FARMLAND.defaultBlockState(), 3);
             CropBlock wheat = (CropBlock) Blocks.WHEAT;
             helper.getLevel().setBlock(crop, wheat.getStateForAge(wheat.getMaxAge()), 3);
@@ -135,7 +138,7 @@ public final class FarmerWorldWorkGameTest {
         }
     }
 
-    @GameTest(maxTicks = 40)
+    @GameTest(structure = "totem:river_households", padding = 40, maxTicks = 40)
     public void matureCarrotsPotatoesAndBeetrootsAreHarvestedAndReplanted(GameTestHelper helper) {
         Villager farmer = spawnVillager(helper, new BlockPos(7, 2, 7));
         try {
@@ -160,6 +163,8 @@ public final class FarmerWorldWorkGameTest {
     private static void harvestAndAssertReplanted(GameTestHelper helper, FarmerWorldWorkAction action, Villager farmer,
                                                    VillagerWorkInventory inventory, BlockPos crop, CropBlock cropBlock,
                                                    String orderId, String outputId, String targetTag) {
+        crop = helper.absolutePos(crop);
+        farmer.setPos(crop.getX() + .5, crop.getY(), crop.getZ() + .5);
         helper.getLevel().setBlock(crop.below(), Blocks.FARMLAND.defaultBlockState(), 3);
         helper.getLevel().setBlock(crop, cropBlock.getStateForAge(cropBlock.getMaxAge()), 3);
         WorkOrder order = new WorkOrder(orderId, "minecraft:farmer", new ItemAmount(outputId, 1), List.of(),

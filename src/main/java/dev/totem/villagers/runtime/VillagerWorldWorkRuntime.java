@@ -85,7 +85,8 @@ public final class VillagerWorldWorkRuntime {
         WorkerAssignmentSavedData assignments = WorkerAssignmentSavedData.forServer(server);
         VillagerWorkInventorySavedData inventories = VillagerWorkInventorySavedData.forServer(server);
         for (ServerLevel level : server.getAllLevels()) {
-            for (Villager villager : LoadedVillagerCache.loaded(level)) {
+            WildResourceSearch.get(level).tick(level);
+            for (Villager villager : LoadedVillagerCache.workers(level)) {
                 String professionId = professionId(villager);
                 if ("totem:miner".equals(professionId) || "totem:lumberjack".equals(professionId)) {
                     tickWorker(level, villager, professionId, catalog, states, assignments, inventories, forceIdleScan);
@@ -118,7 +119,7 @@ public final class VillagerWorldWorkRuntime {
         Optional<WorkZoneRecord> zone = ZONES.assignedZone(worker.getUUID(), professionId,
                 level.dimension().identifier().toString(), assignments::getZone, assignments.getAssignment(worker.getUUID()));
         boolean hasPhysicalWorkstation = !"totem:miner".equals(professionId)
-                || zone.map(assigned -> MinerFurnaceWorkstation.ensureAssigned(level, worker, assigned.zone()).isPresent()).orElse(false);
+                || zone.map(assigned -> MinerFurnaceWorkstation.ensureAssigned(level, worker, assigned.zone()).isPresent()).orElseGet(() -> MinerFurnaceWorkstation.hasIndependentFurnace(level, worker));
         VillagerWorkInventory inventory = inventories.inventory(worker.getUUID());
         var tool = professionId.equals("totem:miner") ? ToolsmithVillageEconomyRuntime.ReplacementTool.PICKAXE
                 : ToolsmithVillageEconomyRuntime.ReplacementTool.AXE;
@@ -127,11 +128,20 @@ public final class VillagerWorldWorkRuntime {
         List<WorkCandidate> candidates = hasPhysicalWorkstation && equipped ? zone.map(assigned ->
                 worldCandidates(level, worker, professionId, state, assigned, inventory, catalog, search)).orElseGet(List::of)
                 : List.of();
+        boolean wild = false;
+        if (candidates.isEmpty() && equipped && hasPhysicalWorkstation && (search.hasDemand || zone.isEmpty())
+                && WildResourceSearch.permitted(level, worker, zone.orElse(null))) {
+            var natural = wildCandidate(level, worker, professionId, state, zone.orElse(null), inventory, catalog);
+            if (natural != null) {
+                candidates = List.of(natural);
+                wild = true;
+            }
+        }
         if (forceIdleScan || VillagerRuntimeBudget.dueForIdleScan(level, worker)) {
             var miner = professionId.equals("totem:miner");
             VillagerHeadStatus.Kind shortage = null;
             if (VillageWorkshopApprenticeship.available(level, worker)) {
-                if (zone.isEmpty()) shortage = miner ? VillagerHeadStatus.Kind.MINE_ZONE : VillagerHeadStatus.Kind.FOREST_ZONE;
+                if (zone.isEmpty() && !wild) shortage = miner ? VillagerHeadStatus.Kind.MINE_ZONE : VillagerHeadStatus.Kind.FOREST_ZONE;
                 else if (!hasPhysicalWorkstation) shortage = VillagerHeadStatus.Kind.FURNACE;
                 else if (!equipped)
                     shortage = miner ? VillagerHeadStatus.Kind.PICKAXE : VillagerHeadStatus.Kind.AXE;
@@ -149,15 +159,17 @@ public final class VillagerWorldWorkRuntime {
         }
         Optional<BlockPos> activeTarget = state.activeWork().flatMap(active -> active.worldTarget())
                 .flatMap(WorldWorkTarget::packedBlockPosition).map(BlockPos::of);
-        boolean atTarget = activeTarget.map(target -> WorldWorkNavigation.isWithinReach(worker, target)).orElse(false);
+        boolean atTarget = activeTarget.isPresent() && (wild ? WorldWorkNavigation.atWildTarget(level, worker, activeTarget.get())
+                : WorldWorkNavigation.isWithinReach(worker, activeTarget.get()));
         if (atTarget) {
             VillagerHeadStatus.clear(worker, VillagerHeadStatus.Kind.UNREACHABLE);
+            if (VillagerRuntimeBudget.dueForIdleScan(level, worker)) VillagerWorkMemory.observeBlock(level, worker, activeTarget.orElseThrow());
             worker.getNavigation().stop();
             worker.lookAt(EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(activeTarget.orElseThrow()));
         }
         WorkScheduleInput input = new WorkScheduleInput(worker.getUUID(), professionId, level.getGameTime(), worker.isAlive(),
                 level.isLoaded(worker.blockPosition()), inDanger(worker), worker.isSleeping(), level.isRaided(worker.blockPosition()),
-                zone.isPresent() && hasPhysicalWorkstation, atTarget, candidates);
+                (zone.isPresent() || wild) && hasPhysicalWorkstation, atTarget, candidates);
         var scheduled = SCHEDULER.tick(catalog, state, input);
         VillagerWorkState next = scheduled.state();
         if (scheduled.readyToCommit().isPresent()) {
@@ -169,7 +181,10 @@ public final class VillagerWorldWorkRuntime {
                 && VillagerRuntimeBudget.dueForNavigationRetry(level, worker)) {
             BlockPos target = BlockPos.of(next.activeWork().orElseThrow().worldTarget().orElseThrow()
                     .packedBlockPosition().orElseThrow());
-            if (!WorldWorkNavigation.moveToReach(level, worker, target, .5D)) {
+            VillagerHeadStatus.report(worker, VillagerHeadStatus.Kind.SEEKING_RESOURCE);
+            Boolean moving = wild ? WildResourceSearch.get(level).move(level, worker, target)
+                    : Boolean.valueOf(WorldWorkNavigation.moveToReach(level, worker, target, .5));
+            if (Boolean.FALSE.equals(moving)) {
                 WorkOrder activeOrder = catalog.snapshot().get(next.activeWork().orElseThrow().orderId());
                 if (activeOrder != null) {
                     VillagerHeadStatus.report(worker, VillagerHeadStatus.Kind.UNREACHABLE);
@@ -180,6 +195,40 @@ public final class VillagerWorldWorkRuntime {
         if (!next.equals(state)) {
             states.put(next);
         }
+    }
+
+    private static boolean outside(WorkZoneRecord zone, ServerLevel level, BlockPos pos) {
+        return zone == null || !zone.zone().contains(level.dimension().identifier().toString(),
+                new BlockCoordinate(pos.getX(), pos.getY(), pos.getZ()));
+    }
+
+    private static WorkCandidate wildCandidate(ServerLevel level, Villager worker, String profession,
+                                               VillagerWorkState state, WorkZoneRecord zone, VillagerWorkInventory inventory,
+                                               WorkOrderCatalog catalog) {
+        var queue = WildResourceSearch.get(level);
+        var home = WildResourceSearch.home(level, worker);
+        if (home == null) return null;
+        var active = state.activeWork();
+        if (active.isPresent()) {
+            var order = catalog.snapshot().get(active.get().orderId());
+            var target = active.get().worldTarget().orElse(null);
+            if (order == null || target == null || !target.dimensionId().equals(level.dimension().identifier().toString())
+                    || target.packedBlockPosition().isEmpty()) return null;
+            var pos = BlockPos.of(target.packedBlockPosition().get());
+            if (!outside(zone, level, pos) || pos.distSqr(home) > WildResourceSearch.RADIUS * WildResourceSearch.RADIUS
+                    || !level.isLoaded(pos) || !level.getBlockState(pos).is(blockTag(order.worldTargetTag()))
+                    || !queue.reserve(level, worker, pos)) return null;
+            return new WorkCandidate(order.id(), WorkSource.WORLD, 0, Optional.of(target));
+        }
+        var orders = catalog.snapshot().values().stream().filter(o -> profession.equals(o.professionId())
+                && o.allowedSources().contains(WorkSource.WORLD) && !o.worldTargetTag().isBlank()
+                && VillageProductionStockPolicy.needsWorldWork(level, worker, inventory, o))
+                .sorted(java.util.Comparator.comparing(WorkOrder::id)).toList();
+        var match = queue.request(level, worker, orders);
+        if (match == null || !outside(zone, level, match.pos()) || !WildResourceSearch.valid(level, worker, match.pos(), match.order(), inventory)
+                || !queue.reserve(level, worker, match.pos())) return null;
+        return new WorkCandidate(match.order().id(), WorkSource.WORLD, 0,
+                Optional.of(new WorldWorkTarget(level.dimension().identifier().toString(), match.pos().asLong())));
     }
 
     // Search progress belongs to the loaded entity. Values never reference the entity or its level.
@@ -281,7 +330,16 @@ public final class VillagerWorldWorkRuntime {
         Optional<BlockPos> target = current.flatMap(WorldWorkTarget::packedBlockPosition).map(BlockPos::of)
                 .filter(pos -> validTarget(level, miner, zone, tag, pos, harvestable));
         if (target.isEmpty() && current.isEmpty()) {
-            target = discover(level, miner, zone, order, tag, false, search, harvestable);
+            for (var seen : VillagerWorkMemory.sites(miner)) {
+                var site = seen.site();
+                if (seen.animal().isPresent() || !site.dimension().equals(level.dimension()) || !level.isLoaded(site.pos())
+                        || outside(zone, level, site.pos()) || !level.getBlockState(site.pos()).is(tag)) continue;
+                if (validTarget(level, miner, zone, tag, site.pos(), harvestable)) {
+                    target = Optional.of(site.pos());
+                    break;
+                }
+            }
+            if (target.isEmpty()) target = discover(level, miner, zone, order, tag, false, search, harvestable);
         }
         return target.map(pos -> new WorkCandidate(order.id(), WorkSource.WORLD, 0,
                 Optional.of(new WorldWorkTarget(level.dimension().identifier().toString(), pos.asLong()))));
@@ -341,13 +399,25 @@ public final class VillagerWorldWorkRuntime {
                                             WorkZoneRecord zone, VillagerWorkInventory inventory) {
         WorldWorkTarget target = state.activeWork().flatMap(active -> active.worldTarget()).orElse(null);
         TagKey<Block> tag = blockTag(order.worldTargetTag());
-        if (target == null || tag == null || zone == null
+        if (target == null || tag == null
                 || !target.dimensionId().equals(level.dimension().identifier().toString())) {
             return failed(state, order, "world target changed");
         }
         BlockPos pos = BlockPos.of(target.packedBlockPosition().orElseThrow());
-        if (!zone.zone().contains(target.dimensionId(), new BlockCoordinate(pos.getX(), pos.getY(), pos.getZ()))
-                || !completeAction(level, miner, zone.zone(), pos, tag, order, inventory)) {
+        boolean harvested;
+        if (outside(zone, level, pos)) {
+            var home = WildResourceSearch.home(level, miner);
+            if (home == null || pos.distSqr(home) > WildResourceSearch.RADIUS * WildResourceSearch.RADIUS
+                    || !WildResourceSearch.permitted(level, miner, zone)
+                    || !WildResourceSearch.valid(level, miner, pos, order, inventory)
+                    || !WildResourceSearch.get(level).reserve(level, miner, pos)) return failed(state, order, "natural target changed");
+            harvested = "totem:miner".equals(order.professionId())
+                    ? MINER_ACTION.complete(level, miner, pos, tag, order, inventory)
+                    : LUMBERJACK_ACTION.completeWild(level, miner, dev.totem.villagers.world.NaturalWorkTrees.at(level, pos), order, inventory);
+        } else {
+            harvested = completeAction(level, miner, zone.zone(), pos, tag, order, inventory);
+        }
+        if (!harvested) {
             return failed(state, order, "world target rejected");
         }
         TradeDiagnostic completed = new TradeDiagnostic(order.id(), WorkSource.WORLD, order.workTicks(), "");

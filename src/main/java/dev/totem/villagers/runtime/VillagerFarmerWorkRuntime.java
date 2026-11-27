@@ -45,7 +45,6 @@ public final class VillagerFarmerWorkRuntime {
     private static final int FARM_RADIUS = 24;
     private static final int MAX_CROP_CHECKS = 1_024;
     private static final int[] FARM_Y_OFFSETS = {0, -1, 1, -2, 2, -3, -4};
-    private static final double FARM_REACH_SQUARED = 16.0D;
     private static final VillagerWorkScheduler SCHEDULER = new VillagerWorkScheduler();
     private static final FarmerWorldWorkAction ACTION = new FarmerWorldWorkAction();
 
@@ -76,7 +75,7 @@ public final class VillagerFarmerWorkRuntime {
         VillagerWorkSavedData states = VillagerWorkSavedData.forServer(server);
         VillagerWorkInventorySavedData inventories = VillagerWorkInventorySavedData.forServer(server);
         for (ServerLevel level : server.getAllLevels()) {
-            for (Villager farmer : LoadedVillagerCache.loaded(level)) {
+            for (Villager farmer : LoadedVillagerCache.workers(level)) {
                 if ("minecraft:farmer".equals(professionId(farmer))) {
                     tickFarmer(level, farmer, catalog, states, inventories, forceIdleScan);
                 }
@@ -122,7 +121,7 @@ public final class VillagerFarmerWorkRuntime {
         List<WorkCandidate> candidates = context.map(value -> candidates(level, farmer, state, value, catalog)).orElseGet(List::of);
         Optional<BlockPos> activeCrop = state.activeWork().flatMap(active -> active.worldTarget())
                 .flatMap(WorldWorkTarget::packedBlockPosition).map(BlockPos::of);
-        boolean atTarget = activeCrop.map(crop -> farmer.distanceToSqr(Vec3.atCenterOf(crop)) <= FARM_REACH_SQUARED).orElse(false);
+        boolean atTarget = activeCrop.map(crop -> FarmerWorldWorkAction.besideCrop(farmer, crop)).orElse(false);
         WorkScheduleInput input = new WorkScheduleInput(farmer.getUUID(), "minecraft:farmer", level.getGameTime(),
                 farmer.isAlive(), level.isLoaded(farmer.blockPosition()), inDanger(farmer), farmer.isSleeping(),
                 level.isRaided(farmer.blockPosition()), context.isPresent(), atTarget, candidates);
@@ -140,8 +139,31 @@ public final class VillagerFarmerWorkRuntime {
                     .packedBlockPosition().orElseThrow());
             farmer.getNavigation().moveTo(crop.getX() + .5D, crop.getY(), crop.getZ() + .5D, .5D);
         }
+        if (next.activeWork().isEmpty() && state.activeWork().isEmpty() && context.isPresent()
+                && candidates.isEmpty() && farmer.getNavigation().isDone() && !farmer.isSleeping()
+                && !farmer.isTrading() && !farmer.isBaby() && !inDanger(farmer) && !level.isRaided(farmer.blockPosition())
+                && ACTION.hasUsableHoe(context.get().inventory()) && VillagerRuntimeBudget.due(level.getGameTime(), farmer.getUUID(), 200)) {
+            weedNearby(level, farmer, context.get().jobSite().pos());
+        }
         if (!next.equals(state)) {
             states.put(next);
+        }
+    }
+
+    private static void weedNearby(ServerLevel level, Villager farmer, BlockPos station) {
+        var feet = BlockPos.containing(farmer.getX(), farmer.getY() + .125, farmer.getZ());
+        if (feet.distSqr(station) > FARM_RADIUS * FARM_RADIUS) return;
+        for (var crop : BlockPos.betweenClosed(feet.offset(-1, 0, -1), feet.offset(1, 0, 1))) {
+            if (!level.isLoaded(crop)) continue;
+            var state = level.getBlockState(crop);
+            if (state.getBlock() instanceof net.minecraft.world.level.block.CropBlock plant && !plant.isMaxAge(state)
+                    && FarmerWorldWorkAction.besideCrop(farmer, crop) && WorldWorkPermissions.mayWork(level, farmer, crop)
+                    && !ProductionParcel.get(level.getServer()).heldByAnother(level, crop.below(), farmer)) {
+                farmer.getLookControl().setLookAt(crop.getX() + .5, crop.getY(), crop.getZ() + .5);
+                farmer.swing(net.minecraft.world.InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT, false);
+                VillagerHeadStatus.report(farmer, VillagerHeadStatus.Kind.WEEDING);
+                return;
+            }
         }
     }
 
@@ -238,7 +260,7 @@ public final class VillagerFarmerWorkRuntime {
     }
 
     private static boolean reachableCrop(Villager farmer, BlockPos crop) {
-        if (farmer.blockPosition().distSqr(crop) <= 4) return true;
+        if (FarmerWorldWorkAction.besideCrop(farmer, crop)) return true;
         var path = farmer.getNavigation().createPath(crop, 1);
         return path != null && path.canReach();
     }
@@ -258,34 +280,47 @@ public final class VillagerFarmerWorkRuntime {
 
     private static Optional<LocatedCrop> findCrop(ServerLevel level, Villager farmer, FarmerContext context,
                                                   Map<String, WorkOrder> ordersById) {
-        int checks = 0;
-        BlockPos jobSite = context.jobSite().pos();
-        // Search the Composter's own elevation across the complete field
-        // before spending the bounded budget on less likely vertical layers.
-        // Each position is checked once for all supported crops, avoiding four
-        // identical field scans when no mature crop exists.
-        for (int yOffset : FARM_Y_OFFSETS) {
-            int y = jobSite.getY() + yOffset;
-            for (int radius = 1; radius <= FARM_RADIUS && checks < MAX_CROP_CHECKS; radius++) {
-                for (int x = jobSite.getX() - radius; x <= jobSite.getX() + radius && checks < MAX_CROP_CHECKS; x++) {
-                    for (int z = jobSite.getZ() - radius; z <= jobSite.getZ() + radius && checks < MAX_CROP_CHECKS; z++) {
-                        if (x != jobSite.getX() - radius && x != jobSite.getX() + radius
-                                && z != jobSite.getZ() - radius && z != jobSite.getZ() + radius) {
-                            continue;
-                        }
-                        BlockPos crop = new BlockPos(x, y, z);
-                        checks++;
-                        String orderId = ACTION.matureCropOrderId(level, crop).orElse(null);
-                        WorkOrder order = orderId == null ? null : ordersById.get(orderId);
-                        if (order != null && validCropTarget(level, farmer, context, crop, order, true)) {
-                            return Optional.of(new LocatedCrop(order, crop));
-                        }
-                    }
+        var parcels = ProductionParcel.get(level.getServer());
+        parcels.reconcile(level, farmer);
+        var field = parcels.claim(farmer.getUUID());
+        if (field.isPresent() && field.get().role().equals("minecraft:farmer")) {
+            FIELD_SEARCHES.remove(farmer);
+            for (var soil : field.get().cells()) {
+                var found = ripeCrop(level, farmer, context, ordersById, soil.above());
+                if (found.isPresent()) return found;
+            }
+            return Optional.empty();
+        }
+        var search = FIELD_SEARCHES.get(farmer);
+        if (search == null || !search.station().equals(context.jobSite())) {
+            var columns = BlockPos.withinBoxByManhattanDistance(context.jobSite().pos(), FARM_RADIUS, 0, FARM_RADIUS).iterator();
+            search = new FieldSearch(context.jobSite(), columns);
+            FIELD_SEARCHES.put(farmer, search);
+        }
+        // Finish all supported heights in each nearby column, then resume at the next column on the next scan.
+        for (int budget = MAX_CROP_CHECKS; budget >= FARM_Y_OFFSETS.length && search.columns().hasNext(); budget -= FARM_Y_OFFSETS.length) {
+            var column = search.columns().next();
+            for (int dy : FARM_Y_OFFSETS) {
+                var found = ripeCrop(level, farmer, context, ordersById, column.above(dy));
+                if (found.isPresent()) {
+                    FIELD_SEARCHES.remove(farmer);
+                    return found;
                 }
             }
         }
+        if (!search.columns().hasNext()) FIELD_SEARCHES.remove(farmer);
         return Optional.empty();
     }
+
+    private static Optional<LocatedCrop> ripeCrop(ServerLevel level, Villager farmer, FarmerContext context,
+                                                  Map<String, WorkOrder> ordersById, BlockPos crop) {
+        var order = ACTION.matureCropOrderId(level, crop).map(ordersById::get).orElse(null);
+        return order != null && validCropTarget(level, farmer, context, crop, order, true)
+                ? Optional.of(new LocatedCrop(order, crop.immutable())) : Optional.empty();
+    }
+
+    private record FieldSearch(GlobalPos station, java.util.Iterator<BlockPos> columns) {}
+    private static final java.util.Map<Villager, FieldSearch> FIELD_SEARCHES = new java.util.WeakHashMap<>();
 
     private static VillagerWorkState failed(VillagerWorkState state, WorkOrder order, String reason) {
         return state.withActiveWork(Optional.empty(), Optional.of(new TradeDiagnostic(order.id(), WorkSource.WORLD,

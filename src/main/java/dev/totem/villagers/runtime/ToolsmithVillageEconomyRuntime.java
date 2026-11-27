@@ -103,7 +103,7 @@ public final class ToolsmithVillageEconomyRuntime {
         }
         VillagerWorkInventorySavedData inventories = VillagerWorkInventorySavedData.forServer(server);
         for (ServerLevel level : server.getAllLevels()) {
-            List<? extends Villager> villagers = LoadedVillagerCache.loaded(level);
+            List<? extends Villager> villagers = LoadedVillagerCache.workers(level);
             villagers.stream().filter(villager -> isProfession(villager, "totem:miner"))
                     .forEach(miner -> smeltMetals(level, miner, inventories.inventory(miner.getUUID())));
             villagers.stream().filter(villager -> isProfession(villager, "minecraft:toolsmith"))
@@ -231,9 +231,7 @@ public final class ToolsmithVillageEconomyRuntime {
         }
         if (count(inventory, Items.IRON_INGOT) >= request.tool().materialCount()) {
             HouseholdResourceRequests.clearStone(toolsmith);
-            if (atStationOrNavigate(toolsmith, smithingTable)) {
-                forge(level, toolsmith, smithingTable, inventory, request.tool().ironOrderId());
-            }
+            forge(level, toolsmith, smithingTable, inventory, request.tool().ironOrderId());
             return;
         }
         if (buyFromProfessionWithSharedPayment(toolsmith, "totem:miner",
@@ -243,9 +241,7 @@ public final class ToolsmithVillageEconomyRuntime {
         }
         if (count(inventory, Items.COPPER_INGOT) >= request.tool().materialCount()) {
             HouseholdResourceRequests.clearStone(toolsmith);
-            if (atStationOrNavigate(toolsmith, smithingTable)) {
-                forge(level, toolsmith, smithingTable, inventory, request.tool().copperOrderId());
-            }
+            forge(level, toolsmith, smithingTable, inventory, request.tool().copperOrderId());
             return;
         }
         if (buyFromProfessionWithSharedPayment(toolsmith, "totem:miner",
@@ -255,9 +251,7 @@ public final class ToolsmithVillageEconomyRuntime {
         }
         if (count(inventory, Items.COBBLESTONE) >= request.tool().materialCount()) {
             HouseholdResourceRequests.clearStone(toolsmith);
-            if (atStationOrNavigate(toolsmith, smithingTable)) {
-                forge(level, toolsmith, smithingTable, inventory, request.tool().stoneOrderId());
-            }
+            forge(level, toolsmith, smithingTable, inventory, request.tool().stoneOrderId());
             return;
         }
         if (!buyFromProfessionWithSharedPayment(toolsmith, "totem:miner",
@@ -350,9 +344,6 @@ public final class ToolsmithVillageEconomyRuntime {
         if (count(toolsmithInventory, Items.STRING) < STRING_BATCH) {
             return obtainRenewableString(level, toolsmith, smithingTable, villagers, inventories,
                     toolsmithInventory);
-        }
-        if (!atStationOrNavigate(toolsmith, smithingTable)) {
-            return true;
         }
         return forge(level, toolsmith, smithingTable, toolsmithInventory, "totem:toolsmith_fishing_rod");
     }
@@ -560,6 +551,7 @@ public final class ToolsmithVillageEconomyRuntime {
     private static boolean forge(ServerLevel level, Villager toolsmith, BlockPos station,
                                  VillagerWorkInventory inventory, String orderId) {
         WorkOrder order = WorkOrderDefinitions.catalog().require(orderId);
+        if (RecipeBackedWorkshopAction.needsCraftingTable(level, order) && !VillageWorktable.approach(level, toolsmith, station)) return false;
         RecipeBackedWorkshopAction action = new RecipeBackedWorkshopAction(level, toolsmith, station, order);
         WorkshopCommitResult result = COMMITS.completePhysical(inventory, order, action, completed -> {
             Item item = BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.parse(completed.output().itemId()));
